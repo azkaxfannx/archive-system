@@ -1,0 +1,97 @@
+import { NextRequest, NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
+
+interface RouteParams {
+  params: { id: string };
+}
+
+// GET - Get single archive
+export async function GET(req: NextRequest, { params }: RouteParams) {
+  try {
+    const archive = await prisma.archive.findUnique({
+      where: { id: params.id },
+    });
+
+    if (!archive) {
+      return NextResponse.json({ error: "Archive not found" }, { status: 404 });
+    }
+
+    return NextResponse.json(archive);
+  } catch (error: any) {
+    console.error("GET Archive error:", error);
+    return NextResponse.json(
+      { error: error.message || "Failed to fetch archive" },
+      { status: 500 }
+    );
+  }
+}
+
+// PUT - Update archive
+export async function PUT(req: NextRequest, { params }: RouteParams) {
+  try {
+    const data = await req.json();
+
+    const archive = await prisma.archive.update({
+      where: { id: params.id },
+      data: {
+        kodeUnit: data.kodeUnit || undefined,
+        indeks: data.indeks || undefined,
+        nomorBerkas: data.nomorBerkas || undefined,
+        judulBerkas: data.judulBerkas || undefined,
+        nomorIsiBerkas: data.nomorIsiBerkas || undefined,
+        jenisNaskahDinas: data.jenisNaskahDinas || undefined,
+        klasifikasi: data.klasifikasi || undefined,
+        nomorSurat: data.nomorSurat || undefined,
+        tanggal: data.tanggal ? new Date(data.tanggal) : undefined,
+        perihal: data.perihal || undefined,
+        tahun:
+          data.tahun ||
+          (data.tanggal ? new Date(data.tanggal).getFullYear() : undefined),
+        tingkatPerkembangan: data.tingkatPerkembangan || undefined,
+        kondisi: data.kondisi || undefined,
+        lokasiSimpan: data.lokasiSimpan || undefined,
+        retensiAktif: data.retensiAktif || undefined,
+        keterangan: data.keterangan || undefined,
+        entryDate: data.entryDate ? new Date(data.entryDate) : undefined,
+        retentionYears: data.retentionYears || undefined,
+        status: data.status || undefined,
+        updatedAt: new Date(),
+      },
+    });
+
+    return NextResponse.json(archive);
+  } catch (error: any) {
+    console.error("PUT Archive error:", error);
+
+    if (error.code === "P2025") {
+      return NextResponse.json({ error: "Archive not found" }, { status: 404 });
+    }
+
+    return NextResponse.json(
+      { error: error.message || "Failed to update archive" },
+      { status: 500 }
+    );
+  }
+}
+
+// DELETE - Delete archive
+export async function DELETE(req: NextRequest, { params }: RouteParams) {
+  try {
+    await prisma.archive.delete({
+      where: { id: params.id },
+    });
+
+    return NextResponse.json({ success: true });
+  } catch (error: any) {
+    console.error("DELETE Archive error:", error);
+
+    if (error.code === "P2025") {
+      return NextResponse.json({ error: "Archive not found" }, { status: 404 });
+    }
+
+    return NextResponse.json(
+      { error: error.message || "Failed to delete archive" },
+      { status: 500 }
+    );
+  }
+}
