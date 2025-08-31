@@ -17,6 +17,7 @@ import ArchiveForm from "./ArchiveForm";
 import ImportModal from "./ImportModal";
 import ArchiveDetailModal from "./ArchiveDetailModal";
 import SuccessModal from "./SuccessModal";
+import ImportResultModal from "./ImportResultModal";
 import DeleteConfirmationModal from "./DeleteConfirmationModal";
 
 export default function ArchiveManagement() {
@@ -53,6 +54,8 @@ export default function ArchiveManagement() {
   );
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [importResult, setImportResult] = useState<any | null>(null);
+  const [showImportResultModal, setShowImportResultModal] = useState(false);
 
   const itemsPerPage = PAGINATION.DEFAULT_LIMIT;
 
@@ -190,29 +193,17 @@ export default function ArchiveManagement() {
   const handleImport = async (file: File) => {
     const result = await archiveAPI.importExcel(file);
 
-    // Show import results
-    const message =
-      `Import selesai!\n` +
-      `Total baris: ${result.totalRows}\n` +
-      `Berhasil: ${result.successRows}\n` +
-      `Gagal: ${result.failedRows}`;
+    // Simpan result ke state
+    setImportResult(result);
+    setShowImportResultModal(true);
 
-    if (result.failedRows > 0) {
-      console.error("Import errors:", result.errors);
-      alert(message + `\n\nPeriksa console untuk detail error.`);
-    } else {
-      alert(message);
-    }
-
-    // Refresh data dan tutup modal
+    // Refresh data
     mutate();
 
-    // Refresh stats
     fetch("/api/archives/stats")
       .then((res) => res.json())
       .then((data) => setStats(data));
 
-    // Trigger header refresh
     triggerHeaderRefresh();
 
     setShowImportModal(false);
@@ -350,6 +341,13 @@ export default function ArchiveManagement() {
           onImport={handleImport}
         />
       )}
+
+      {/* Import Result Modal */}
+      <ImportResultModal
+        isOpen={showImportResultModal}
+        onClose={() => setShowImportResultModal(false)}
+        result={importResult}
+      />
 
       {/* Detail Modal */}
       {showDetailModal && selectedArchive && (
