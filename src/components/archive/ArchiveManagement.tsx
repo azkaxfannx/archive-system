@@ -17,6 +17,7 @@ import ArchiveForm from "./ArchiveForm";
 import ImportModal from "./ImportModal";
 import ArchiveDetailModal from "./ArchiveDetailModal";
 import SuccessModal from "./SuccessModal";
+import ExportResultModal from "./ExportResultModal";
 import ImportResultModal from "./ImportResultModal";
 import DeleteConfirmationModal from "./DeleteConfirmationModal";
 
@@ -56,6 +57,8 @@ export default function ArchiveManagement() {
   const [isLoading, setIsLoading] = useState(false);
   const [importResult, setImportResult] = useState<any | null>(null);
   const [showImportResultModal, setShowImportResultModal] = useState(false);
+  const [exportResult, setExportResult] = useState<any | null>(null);
+  const [showExportResultModal, setShowExportResultModal] = useState(false);
 
   const itemsPerPage = PAGINATION.DEFAULT_LIMIT;
 
@@ -143,10 +146,8 @@ export default function ArchiveManagement() {
     try {
       setIsLoading(true);
 
-      // Ambil semua data dari API
       const allArchives = await archiveAPI.getAllArchives();
 
-      // Konversi ke format Excel
       const worksheet = XLSX.utils.json_to_sheet(
         allArchives.map((archive) => ({
           "KODE UNIT": archive.kodeUnit,
@@ -175,16 +176,24 @@ export default function ArchiveManagement() {
       const workbook = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(workbook, worksheet, "Data Arsip");
 
-      // Download file
       const fileName = `data-arsip-${
         new Date().toISOString().split("T")[0]
       }.xlsx`;
       XLSX.writeFile(workbook, fileName);
 
-      alert(`File berhasil diexport: ${fileName}`);
+      // ✅ Simpan hasil export ke modal
+      setExportResult({
+        fileName,
+        totalRows: allArchives.length,
+      });
+      setShowExportResultModal(true);
     } catch (error) {
       console.error("Export failed:", error);
-      alert("Gagal mengexport data");
+      setExportResult({
+        fileName: "Gagal Export",
+        totalRows: 0,
+      });
+      setShowExportResultModal(true);
     } finally {
       setIsLoading(false);
     }
@@ -341,6 +350,13 @@ export default function ArchiveManagement() {
           onImport={handleImport}
         />
       )}
+
+      {/* Export Result Modal */}
+      <ExportResultModal
+        isOpen={showExportResultModal}
+        onClose={() => setShowExportResultModal(false)}
+        result={exportResult}
+      />
 
       {/* Import Result Modal */}
       <ImportResultModal
