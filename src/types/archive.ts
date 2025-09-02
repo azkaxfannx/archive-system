@@ -47,6 +47,31 @@ export interface ArchiveFormData {
   status?: "ACTIVE" | "INACTIVE" | "DISPOSE_ELIGIBLE";
 }
 
+// Peminjaman interfaces
+export interface PeminjamanRecord {
+  id: string;
+  nomorSurat: string;
+  peminjam: string;
+  keperluan: string;
+  tanggalPinjam: string;
+  tanggalHarusKembali: string;
+  tanggalPengembalian?: string | null;
+  archiveId: string;
+  archive: ArchiveRecord;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PeminjamanFormData {
+  nomorSurat: string;
+  peminjam: string;
+  keperluan: string;
+  tanggalPinjam?: string; // optional karena bisa auto-set ke today
+  tanggalHarusKembali?: string; // optional karena auto-calculated
+  tanggalPengembalian?: string | null;
+  archiveId: string;
+}
+
 // Pagination interface
 export interface PaginationData {
   page: number;

@@ -1,7 +1,11 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { ArchiveRecord, ArchiveFormData } from "@/types/archive";
+import {
+  ArchiveRecord,
+  ArchiveFormData,
+  PeminjamanFormData,
+} from "@/types/archive";
 import { useArchives } from "@/hooks/useArchives";
 import { archiveAPI } from "@/services/archiveAPI";
 import * as XLSX from "xlsx";
@@ -9,28 +13,37 @@ import { PAGINATION } from "@/utils/constants";
 
 // Components
 import Header from "../layout/Header";
-import StatsCards from "../ui/StatsCards";
+import StatsCards from "../ui/ArchiveStatsCards";
 import Pagination from "../ui/Pagination";
 
 import ArchiveTable from "./ArchiveTable";
 import ArchiveForm from "./ArchiveForm";
-import ImportModal from "./ImportModal";
-import ArchiveDetailModal from "./ArchiveDetailModal";
-import SuccessModal from "./SuccessModal";
-import ExportResultModal from "./ExportResultModal";
-import ImportResultModal from "./ImportResultModal";
-import DeleteConfirmationModal from "./DeleteConfirmationModal";
+import PeminjamanForm from "../peminjaman/PeminjamanForm";
+import ImportModal from "../ui/modal/ImportModal";
+import ArchiveDetailModal from "../ui/modal/ArchiveDetailModal";
+import SuccessModal from "../ui/modal/SuccessModal";
+import ExportResultModal from "../ui/modal/ExportResultModal";
+import ImportResultModal from "../ui/modal/ImportResultModal";
+import DeleteConfirmationModal from "../ui/modal/DeleteConfirmationModal";
 
 export default function ArchiveManagement() {
   // State management
   const [currentPage, setCurrentPage] = useState(1);
   const [searchQuery, setSearchQuery] = useState("");
-  const [sortField, setSortField] = useState("entryDate");
+  const [sortField, setSortField] = useState("tanggal");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
   const [selectedFilter, setSelectedFilter] = useState("");
   const [columnFilters, setColumnFilters] = useState<Record<string, string>>(
     {}
   );
+  const [showPeminjamanForm, setShowPeminjamanForm] = useState(false);
+
+  // New state for period and year filters
+  const [periodFilters, setPeriodFilters] = useState({
+    startMonth: "",
+    endMonth: "",
+    year: "",
+  });
 
   // Count states
   const [stats, setStats] = useState({
@@ -63,16 +76,14 @@ export default function ArchiveManagement() {
   const itemsPerPage = PAGINATION.DEFAULT_LIMIT;
 
   // Success Modal
-
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [successMessage, setSuccessMessage] = useState("");
 
   // Delete Modal
-
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
-  // Fetch archives
+  // Fetch archives with period filters
   const { archives, pagination, loading, error, mutate } = useArchives({
     page: currentPage,
     limit: itemsPerPage,
@@ -81,16 +92,32 @@ export default function ArchiveManagement() {
     order: sortOrder,
     status: selectedFilter,
     filters: columnFilters,
+    // Add period filters
+    startMonth: periodFilters.startMonth,
+    endMonth: periodFilters.endMonth,
+    year: periodFilters.year,
   });
 
-  // ✅ Header refresh trigger
+  // Header refresh trigger
   const [headerRefreshTrigger, setHeaderRefreshTrigger] = useState(0);
 
   const triggerHeaderRefresh = () => {
     setHeaderRefreshTrigger((prev) => prev + 1);
   };
 
-  // ✅ FIXED: Proper bidirectional sorting handler
+  // Handle period filter changes
+  const handlePeriodFilterChange = (
+    field: keyof typeof periodFilters,
+    value: string
+  ) => {
+    setPeriodFilters((prev) => ({
+      ...prev,
+      [field]: value,
+    }));
+    setCurrentPage(1); // Reset to first page when filter changes
+  };
+
+  // FIXED: Proper bidirectional sorting handler
   const handleSort = (field: string) => {
     console.log("Current sort state:", {
       sortField,
@@ -106,8 +133,8 @@ export default function ArchiveManagement() {
     } else {
       // Set field baru dengan default yang konsisten
       setSortField(field);
-      // ✅ Untuk entryDate, default ke DESC agar terbaru di atas
-      const defaultOrder = field === "entryDate" ? "desc" : "asc";
+      // Untuk tanggal, default ke DESC agar terbaru di atas
+      const defaultOrder = field === "tanggal" ? "desc" : "asc";
       setSortOrder(defaultOrder);
       console.log(
         "Setting new sort field:",
@@ -122,7 +149,7 @@ export default function ArchiveManagement() {
     new Date().toLocaleString("id-ID")
   );
 
-  // ✅ IMPROVED: Column filter handler
+  // IMPROVED: Column filter handler
   const handleColumnFilter = (column: string, value: string) => {
     setColumnFilters((prev) => {
       const newFilters = { ...prev };
@@ -146,10 +173,31 @@ export default function ArchiveManagement() {
     try {
       setIsLoading(true);
 
-      const allArchives = await archiveAPI.getAllArchives();
+      // Get all archives with current filters applied
+      const queryParams = new URLSearchParams({
+        limit: "999999", // Get all records
+        search: searchQuery,
+        status: selectedFilter,
+        sort: sortField,
+        order: sortOrder,
+        ...(periodFilters.year && { year: periodFilters.year }),
+        ...(periodFilters.startMonth && {
+          startMonth: periodFilters.startMonth,
+        }),
+        ...(periodFilters.endMonth && { endMonth: periodFilters.endMonth }),
+      });
+
+      // Add column filters
+      Object.entries(columnFilters).forEach(([key, value]) => {
+        queryParams.append(`filter[${key}]`, value);
+      });
+
+      const response = await fetch(`/api/archives?${queryParams}`);
+      const result = await response.json();
+      const allArchives = result.data || [];
 
       const worksheet = XLSX.utils.json_to_sheet(
-        allArchives.map((archive) => ({
+        allArchives.map((archive: any) => ({
           "KODE UNIT": archive.kodeUnit,
           INDEKS: archive.indeks,
           "NOMOR BERKAS": archive.nomorBerkas,
@@ -158,7 +206,7 @@ export default function ArchiveManagement() {
           "NOMOR SURAT": archive.nomorSurat,
           KLASIFIKASI: archive.klasifikasi,
           PERIHAL: archive.perihal,
-          TANGGAL: archive.tanggal
+          "TANGGAL SURAT": archive.tanggal
             ? new Date(archive.tanggal).toLocaleDateString("id-ID")
             : "",
           "TINGKAT PERKEMBANGAN": archive.tingkatPerkembangan,
@@ -167,7 +215,6 @@ export default function ArchiveManagement() {
           "RETENSI AKTIF": archive.retensiAktif,
           "RETENSI INAKTIF": archive.retensiInaktif,
           KETERANGAN: archive.keterangan,
-          "ENTRY DATE": new Date(archive.entryDate).toLocaleDateString("id-ID"),
           "RETENTION YEARS": archive.retentionYears,
           STATUS: archive.status,
         }))
@@ -176,12 +223,21 @@ export default function ArchiveManagement() {
       const workbook = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(workbook, worksheet, "Data Arsip");
 
-      const fileName = `data-arsip-${
+      // Generate filename with period info
+      let periodInfo = "";
+      if (periodFilters.year) {
+        periodInfo += `-${periodFilters.year}`;
+        if (periodFilters.startMonth && periodFilters.endMonth) {
+          periodInfo += `-bulan${periodFilters.startMonth}to${periodFilters.endMonth}`;
+        }
+      }
+
+      const fileName = `data-arsip${periodInfo}-${
         new Date().toISOString().split("T")[0]
       }.xlsx`;
       XLSX.writeFile(workbook, fileName);
 
-      // ✅ Simpan hasil export ke modal
+      // Simpan hasil export ke modal
       setExportResult({
         fileName,
         totalRows: allArchives.length,
@@ -240,7 +296,7 @@ export default function ArchiveManagement() {
 
       triggerHeaderRefresh();
 
-      // ✅ Tampilkan modal sukses
+      // Tampilkan modal sukses
       setShowSuccessModal(true);
     } catch (error) {
       console.error(error);
@@ -250,7 +306,32 @@ export default function ArchiveManagement() {
     }
   };
 
-  // ✅ DEBUG: Log state changes
+  const handlePinjamArchive = (archive: ArchiveRecord) => {
+    setSelectedArchive(archive);
+    setShowPeminjamanForm(true);
+  };
+
+  const handleSavePeminjaman = async (formData: PeminjamanFormData) => {
+    setIsLoading(true);
+    try {
+      await archiveAPI.createPeminjaman(formData);
+      setSuccessMessage("Peminjaman berkas berhasil dibuat!");
+
+      setShowPeminjamanForm(false);
+      setSelectedArchive(null);
+      mutate(); // Refresh archives if needed
+
+      // Tampilkan modal sukses
+      setShowSuccessModal(true);
+    } catch (error) {
+      console.error("Error creating peminjaman:", error);
+      alert("Terjadi kesalahan saat membuat peminjaman!");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // DEBUG: Log state changes
   useEffect(() => {
     console.log("Sort state changed:", { sortField, sortOrder });
   }, [sortField, sortOrder]);
@@ -258,6 +339,10 @@ export default function ArchiveManagement() {
   useEffect(() => {
     console.log("Column filters changed:", columnFilters);
   }, [columnFilters]);
+
+  useEffect(() => {
+    console.log("Period filters changed:", periodFilters);
+  }, [periodFilters]);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -293,10 +378,11 @@ export default function ArchiveManagement() {
             setSelectedArchive(archive);
             setShowDetailModal(true);
           }}
-          onSort={handleSort} // ✅ FIXED: Use proper sort handler
+          onPinjam={(archive) => handlePinjamArchive(archive)} // Tambahkan ini
+          onSort={handleSort}
           sortField={sortField}
           sortOrder={sortOrder}
-          onColumnFilter={handleColumnFilter} // ✅ IMPROVED: Use proper filter handler
+          onColumnFilter={handleColumnFilter}
           onAdd={() => {
             setSelectedArchive(null);
             setShowAddForm(true);
@@ -304,6 +390,8 @@ export default function ArchiveManagement() {
           onImport={() => setShowImportModal(true)}
           onExport={handleExport}
           columnFilters={columnFilters}
+          periodFilters={periodFilters}
+          onPeriodFilterChange={handlePeriodFilterChange}
         />
 
         {/* Pagination */}
@@ -370,6 +458,16 @@ export default function ArchiveManagement() {
         <ArchiveDetailModal
           archive={selectedArchive}
           onClose={() => setShowDetailModal(false)}
+        />
+      )}
+
+      {/* Peminjaman Form Modal */}
+      {showPeminjamanForm && selectedArchive && (
+        <PeminjamanForm
+          archive={selectedArchive}
+          onSave={handleSavePeminjaman}
+          onCancel={() => setShowPeminjamanForm(false)}
+          loading={isLoading}
         />
       )}
 

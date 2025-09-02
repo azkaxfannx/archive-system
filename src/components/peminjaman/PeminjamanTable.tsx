@@ -1,22 +1,21 @@
 "use client";
 
-import React, { useRef, useEffect, useState, RefObject } from "react";
+import React, { useState } from "react";
 import {
-  Eye,
   Edit2,
-  Archive,
-  Trash2,
+  RotateCcw,
   Filter,
   ArrowUpDown,
   ArrowUp,
   ArrowDown,
   FileText,
+  AlertTriangle,
+  CheckCircle,
+  Clock,
   Calendar,
   CalendarDays,
-  BookOpen,
 } from "lucide-react";
-import { ArchiveRecord } from "@/types/archive";
-import StatusBadge from "@/components/ui/StatusBadge";
+import { PeminjamanRecord } from "@/types/archive";
 import LoadingSpinner from "@/components/ui/LoadingSpinner";
 
 interface PeriodFilters {
@@ -25,37 +24,31 @@ interface PeriodFilters {
   year: string;
 }
 
-interface ArchiveTableProps {
-  archives: ArchiveRecord[];
+interface PeminjamanTableProps {
+  peminjaman: PeminjamanRecord[];
   loading: boolean;
-  onEdit: (archive: ArchiveRecord) => void;
-  onDelete: (id: string) => void;
-  onView: (archive: ArchiveRecord) => void;
-  onPinjam: (archive: ArchiveRecord) => void;
+  onEdit: (peminjaman: PeminjamanRecord) => void;
+  onKembalikan: (peminjaman: PeminjamanRecord) => void;
   onSort: (field: string) => void;
   sortField: string;
   sortOrder: "asc" | "desc";
   onColumnFilter: (column: string, value: string) => void;
   columnFilters: Record<string, string>;
-  onAdd: () => void;
-  onImport: () => void;
+  statusFilter: string;
+  onStatusFilterChange: (status: string) => void;
   onExport: () => void;
+  isExporting: boolean;
   periodFilters: PeriodFilters;
   onPeriodFilterChange: (field: keyof PeriodFilters, value: string) => void;
 }
 
 const TABLE_HEADERS = [
   { key: "nomorSurat", label: "No. Surat", sortable: true },
-  {
-    key: "tanggal",
-    label: "Tgl Surat",
-    sortable: true,
-    tooltip: "Diurutkan berdasarkan tanggal surat",
-  },
-  { key: "nomorBerkas", label: "No. Berkas", sortable: true },
-  { key: "judulBerkas", label: "Judul Berkas", sortable: false },
-  { key: "lokasiSimpan", label: "Lokasi Simpan", sortable: true },
-  { key: "retensi", label: "Retensi", sortable: false },
+  { key: "peminjam", label: "Peminjam", sortable: true },
+  { key: "judulBerkas", label: "Berkas", sortable: false },
+  { key: "tanggalPinjam", label: "Tgl Pinjam", sortable: true },
+  { key: "tanggalHarusKembali", label: "Harus Kembali", sortable: true },
+  { key: "tanggalPengembalian", label: "Tgl Kembali", sortable: true },
   { key: "status", label: "Status", sortable: true },
   { key: "actions", label: "Aksi", sortable: false },
 ];
@@ -75,25 +68,32 @@ const MONTHS = [
   { value: "12", label: "Desember" },
 ];
 
-export default function ArchiveTable({
-  archives,
+const STATUS_OPTIONS = [
+  { value: "", label: "Semua Status" },
+  { value: "aktif", label: "Sedang Dipinjam" },
+  { value: "kembali", label: "Sudah Dikembalikan" },
+  { value: "terlambat", label: "Terlambat" },
+];
+
+export default function PeminjamanTable({
+  peminjaman,
   loading,
   onEdit,
-  onDelete,
-  onView,
-  onPinjam,
+  onKembalikan,
   onSort,
   sortField,
   sortOrder,
   onColumnFilter,
   columnFilters,
-  onAdd,
-  onImport,
+  statusFilter,
+  onStatusFilterChange,
   onExport,
+  isExporting,
   periodFilters,
   onPeriodFilterChange,
-}: ArchiveTableProps) {
+}: PeminjamanTableProps) {
   const [showFilters, setShowFilters] = useState(false);
+  const [localFilters, setLocalFilters] = useState<Record<string, string>>({});
   const [showPeriodFilters, setShowPeriodFilters] = useState(false);
 
   const getSortIcon = (field: string) => {
@@ -107,35 +107,13 @@ export default function ArchiveTable({
     );
   };
 
-  const inputRefs = {
-    nomorSurat: useRef<HTMLInputElement>(null),
-    judulBerkas: useRef<HTMLInputElement>(null),
-    lokasiSimpan: useRef<HTMLInputElement>(null),
-  };
-
-  const selectRefs = {
-    jenisNaskahDinas: useRef<HTMLSelectElement>(null),
-  };
-
-  const [focusedColumn, setFocusedColumn] = useState<string | null>(null);
-  const [localFilters, setLocalFilters] = useState<Record<string, string>>({});
-
   const handleInputChange = (column: string, value: string) => {
     setLocalFilters((prev) => ({ ...prev, [column]: value }));
-    setFocusedColumn(column);
+    setTimeout(() => {
+      onColumnFilter(column, value);
+    }, 300);
   };
 
-  useEffect(() => {
-    const timeout = setTimeout(() => {
-      Object.entries(localFilters).forEach(([col, val]) => {
-        onColumnFilter(col, val);
-      });
-    }, 300);
-
-    return () => clearTimeout(timeout);
-  }, [localFilters]);
-
-  // Generate years for dropdown (current year ± 10 years)
   const generateYears = () => {
     const currentYear = new Date().getFullYear();
     const years = [];
@@ -145,7 +123,6 @@ export default function ArchiveTable({
     return years;
   };
 
-  // Check if period filters are active
   const hasPeriodFilters =
     periodFilters.year || periodFilters.startMonth || periodFilters.endMonth;
 
@@ -185,13 +162,7 @@ export default function ArchiveTable({
     onPeriodFilterChange("endMonth", "");
   };
 
-  // Simple alternating row colors
-  const getRowColorClass = (index: number) => {
-    return index % 2 === 0 ? "bg-white" : "bg-gray-50";
-  };
-
-  // Helper function to format date safely
-  const formatDocumentDate = (dateString: string | null | undefined) => {
+  const formatDate = (dateString: string | null | undefined) => {
     if (!dateString) return "-";
     try {
       return new Date(dateString).toLocaleDateString("id-ID", {
@@ -204,59 +175,114 @@ export default function ArchiveTable({
     }
   };
 
+  const getStatusBadge = (peminjaman: PeminjamanRecord) => {
+    const today = new Date();
+    const harusKembali = new Date(peminjaman.tanggalHarusKembali);
+    const sudahKembali = !!peminjaman.tanggalPengembalian;
+
+    if (sudahKembali) {
+      return (
+        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+          <CheckCircle size={12} className="mr-1" />
+          Dikembalikan
+        </span>
+      );
+    }
+
+    if (today > harusKembali) {
+      const dayLate = Math.ceil(
+        (today.getTime() - harusKembali.getTime()) / (1000 * 60 * 60 * 24)
+      );
+      return (
+        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+          <AlertTriangle size={12} className="mr-1" />
+          Terlambat {dayLate}h
+        </span>
+      );
+    }
+
+    return (
+      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
+        <Clock size={12} className="mr-1" />
+        Dipinjam
+      </span>
+    );
+  };
+
+  const getRowColorClass = (index: number, peminjaman: PeminjamanRecord) => {
+    const today = new Date();
+    const harusKembali = new Date(peminjaman.tanggalHarusKembali);
+    const sudahKembali = !!peminjaman.tanggalPengembalian;
+
+    if (!sudahKembali && today > harusKembali) {
+      return "bg-red-50 hover:bg-red-100";
+    }
+
+    return index % 2 === 0
+      ? "bg-white hover:bg-blue-50"
+      : "bg-gray-50 hover:bg-blue-50";
+  };
+
   if (loading) {
     return <LoadingSpinner />;
   }
 
   return (
     <div className="bg-white rounded-lg shadow overflow-hidden">
-      {/* Period Filters Banner */}
-      {hasPeriodFilters && (
-        <div className="px-6 py-2 bg-blue-50 border-b border-blue-200 flex justify-between items-center">
-          <div className="flex items-center space-x-2">
-            <Calendar size={16} className="text-blue-600" />
-            <span className="text-sm font-medium text-blue-800">
-              Filter Periode: {getPeriodFilterText()}
-            </span>
-          </div>
-          <button
-            onClick={clearPeriodFilters}
-            className="text-xs text-blue-600 hover:text-blue-800 underline"
-          >
-            Hapus Filter
-          </button>
-        </div>
-      )}
-
-      {/* Filters Toggle */}
+      {/* Header Controls */}
       <div className="px-6 py-3 bg-gray-50 border-b flex justify-between items-center">
-        <span className="text-sm font-medium text-gray-700">
-          {archives.length} arsip ditemukan
-        </span>
+        <div className="flex items-center space-x-4">
+          <span className="text-sm font-medium text-gray-700">
+            {peminjaman.length} peminjaman ditemukan
+          </span>
+
+          {/* Period Filters Banner */}
+          {hasPeriodFilters && (
+            <div className="px-6 py-2 bg-blue-50 border-b border-blue-200 flex justify-between items-center">
+              <div className="flex items-center space-x-2">
+                <Calendar size={16} className="text-blue-600" />
+                <span className="text-sm font-medium text-blue-800">
+                  Filter Periode: {getPeriodFilterText()}
+                </span>
+              </div>
+              <button
+                onClick={clearPeriodFilters}
+                className="text-xs text-blue-600 hover:text-blue-800 underline"
+              >
+                Hapus Filter
+              </button>
+            </div>
+          )}
+
+          {/* Status Filter */}
+          <select
+            value={statusFilter}
+            onChange={(e) => onStatusFilterChange(e.target.value)}
+            className="text-sm border border-gray-300 rounded px-3 py-1.5 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          >
+            {STATUS_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </div>
 
         <div className="flex items-center space-x-2">
-          {/* Tombol Export */}
+          {/* Export Button */}
           <button
             onClick={onExport}
-            className="px-3 py-1.5 text-sm rounded bg-yellow-600 text-white hover:bg-yellow-700 transition-colors"
+            disabled={isExporting}
+            className="px-3 py-1.5 text-sm rounded bg-yellow-600 text-white hover:bg-yellow-700 transition-colors disabled:opacity-50 flex items-center"
           >
-            Export Excel
-          </button>
-
-          {/* Tombol Import */}
-          <button
-            onClick={onImport}
-            className="px-3 py-1.5 text-sm rounded bg-indigo-600 text-white hover:bg-indigo-700 transition-colors"
-          >
-            Import Excel
-          </button>
-
-          {/* Tombol Tambah */}
-          <button
-            onClick={onAdd}
-            className="px-3 py-1.5 text-sm rounded bg-green-600 text-white hover:bg-green-700 transition-colors"
-          >
-            + Tambah Arsip
+            {isExporting ? (
+              <>
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                Exporting...
+              </>
+            ) : (
+              "Export Excel"
+            )}
           </button>
 
           {/* Toggle Period Filter */}
@@ -368,13 +394,12 @@ export default function ArchiveTable({
       {/* Column Filters */}
       {showFilters && (
         <div className="px-6 py-4 bg-gray-50 border-b">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">
                 Nomor Surat
               </label>
               <input
-                ref={inputRefs.nomorSurat}
                 type="text"
                 value={
                   localFilters.nomorSurat || columnFilters.nomorSurat || ""
@@ -383,15 +408,28 @@ export default function ArchiveTable({
                   handleInputChange("nomorSurat", e.target.value)
                 }
                 className="w-full text-sm border border-gray-300 rounded px-2 py-1 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="Filter..."
+                placeholder="Filter nomor surat..."
               />
             </div>
+
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">
+                Nama Peminjam
+              </label>
+              <input
+                type="text"
+                value={localFilters.peminjam || columnFilters.peminjam || ""}
+                onChange={(e) => handleInputChange("peminjam", e.target.value)}
+                className="w-full text-sm border border-gray-300 rounded px-2 py-1 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="Filter nama peminjam..."
+              />
+            </div>
+
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">
                 Judul Berkas
               </label>
               <input
-                ref={inputRefs.judulBerkas}
                 type="text"
                 value={
                   localFilters.judulBerkas || columnFilters.judulBerkas || ""
@@ -400,63 +438,8 @@ export default function ArchiveTable({
                   handleInputChange("judulBerkas", e.target.value)
                 }
                 className="w-full text-sm border border-gray-300 rounded px-2 py-1 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="Filter..."
+                placeholder="Filter judul berkas..."
               />
-            </div>
-            {/* <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">
-                Lokasi Simpan
-              </label>
-              <input
-                ref={inputRefs.lokasiSimpan}
-                type="text"
-                value={
-                  localFilters.lokasiSimpan || columnFilters.lokasiSimpan || ""
-                }
-                onChange={(e) =>
-                  handleInputChange("lokasiSimpan", e.target.value)
-                }
-                className="w-full text-sm border border-gray-300 rounded px-2 py-1 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="Filter..."
-              />
-            </div> */}
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">
-                Jenis
-              </label>
-              <select
-                ref={selectRefs.jenisNaskahDinas}
-                value={
-                  localFilters.jenisNaskahDinas ||
-                  columnFilters.jenisNaskahDinas ||
-                  ""
-                }
-                onChange={(e) =>
-                  handleInputChange("jenisNaskahDinas", e.target.value)
-                }
-                className="w-full text-sm border border-gray-300 rounded px-2 py-1 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              >
-                <option value="">Semua Jenis</option>
-                <option value="Surat Masuk">Surat Masuk</option>
-                <option value="Surat Keluar">Surat Keluar</option>
-                <option value="Memo">Memo</option>
-                <option value="Laporan">Laporan</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">
-                Status
-              </label>
-              <select
-                value={localFilters.status || columnFilters.status || ""}
-                onChange={(e) => handleInputChange("status", e.target.value)}
-                className="w-full text-sm border border-gray-300 rounded px-2 py-1 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              >
-                <option value="">Semua Status</option>
-                <option value="ACTIVE">Aktif</option>
-                <option value="INACTIVE">Inaktif</option>
-                <option value="DISPOSE_ELIGIBLE">Siap Musnah</option>
-              </select>
             </div>
           </div>
         </div>
@@ -476,10 +459,6 @@ export default function ArchiveTable({
                       ? "cursor-pointer hover:bg-gray-100 transition-colors"
                       : ""
                   }`}
-                  title={
-                    header.tooltip ||
-                    (header.sortable ? "Klik untuk mengurutkan" : "")
-                  }
                 >
                   <div className="flex items-center space-x-1">
                     <span>{header.label}</span>
@@ -490,104 +469,75 @@ export default function ArchiveTable({
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
-            {archives.map((archive, index) => (
+            {peminjaman.map((item, index) => (
               <tr
-                key={archive.id}
-                className={`hover:bg-blue-50 transition-colors ${getRowColorClass(
-                  index
-                )}`}
+                key={item.id}
+                className={`transition-colors ${getRowColorClass(index, item)}`}
               >
                 {/* No. Surat */}
                 <td className="px-6 py-4 whitespace-nowrap">
                   <div className="text-sm font-medium text-gray-900">
-                    {archive.nomorSurat}
-                  </div>
-                  <div className="text-sm text-gray-500 truncate max-w-32">
-                    {archive.klasifikasi}
+                    {item.nomorSurat}
                   </div>
                 </td>
 
-                {/* Tgl Surat */}
+                {/* Peminjam */}
                 <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="text-sm text-gray-900">
-                    {formatDocumentDate(archive.tanggal)}
-                  </div>
-                  <div className="text-sm text-gray-500">{archive.indeks}</div>
-                </td>
-
-                {/* No. Berkas */}
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="text-sm font-medium text-gray-900 max-w-32 truncate">
-                    {archive.nomorBerkas}
-                  </div>
-                  <div className="text-sm text-gray-500">
-                    {archive.jenisNaskahDinas}
-                  </div>
+                  <div className="text-sm text-gray-900">{item.peminjam}</div>
                 </td>
 
                 {/* Judul Berkas */}
-                <td className="px-6 py-4">
-                  <div className="text-sm text-gray-900 max-w-xs">
-                    <div className="truncate">{archive.judulBerkas}</div>
-                    <div className="text-sm text-gray-500 truncate">
-                      {archive.perihal}
-                    </div>
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <div className="text-sm text-gray-900">
+                    {item.archive?.judulBerkas || "-"}
                   </div>
                 </td>
 
-                {/* Lokasi Simpan */}
+                {/* Tgl Pinjam */}
                 <td className="px-6 py-4 whitespace-nowrap">
                   <div className="text-sm text-gray-900">
-                    {archive.lokasiSimpan}
-                  </div>
-                  <div className="text-sm text-gray-500">
-                    {archive.tingkatPerkembangan} • {archive.kondisi}
+                    {formatDate(item.tanggalPinjam)}
                   </div>
                 </td>
 
-                {/* Retensi */}
+                {/* Harus Kembali */}
                 <td className="px-6 py-4 whitespace-nowrap">
                   <div className="text-sm text-gray-900">
-                    {archive.retentionYears} tahun
+                    {formatDate(item.tanggalHarusKembali)}
+                  </div>
+                </td>
+
+                {/* Tgl Kembali */}
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <div className="text-sm text-gray-900">
+                    {formatDate(item.tanggalPengembalian)}
                   </div>
                 </td>
 
                 {/* Status */}
                 <td className="px-6 py-4 whitespace-nowrap">
-                  <StatusBadge status={archive.status} />
+                  {getStatusBadge(item)}
                 </td>
 
                 {/* Aksi */}
                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                   <div className="flex space-x-1">
                     <button
-                      onClick={() => onView(archive)}
-                      className="text-blue-600 hover:text-blue-900 p-1 rounded hover:bg-blue-50 transition-colors"
-                      title="Lihat Detail"
-                    >
-                      <Eye size={16} />
-                    </button>
-                    <button
-                      onClick={() => onPinjam(archive)}
-                      className="text-orange-600 hover:text-orange-900 p-1 rounded hover:bg-orange-50 transition-colors"
-                      title="Pinjam Berkas"
-                    >
-                      <BookOpen size={16} />
-                    </button>
-                    <button
-                      onClick={() => onEdit(archive)}
+                      onClick={() => onEdit(item)}
                       className="text-green-600 hover:text-green-900 p-1 rounded hover:bg-green-50 transition-colors"
                       title="Edit"
                     >
                       <Edit2 size={16} />
                     </button>
-                    <button
-                      onClick={() => onDelete(archive.id)}
-                      className="text-red-600 hover:text-red-900 p-1 rounded hover:bg-red-50 transition-colors"
-                      title="Hapus"
-                    >
-                      <Trash2 size={16} />
-                    </button>
+                    {!item.tanggalPengembalian && (
+                      <button
+                        onClick={() => onKembalikan(item)}
+                        className="text-blue-600 hover:text-blue-900 p-1 rounded hover:bg-blue-50 transition-colors"
+                        title="Kembalikan"
+                      >
+                        <RotateCcw size={16} />
+                      </button>
+                    )}
                   </div>
                 </td>
               </tr>
@@ -597,16 +547,16 @@ export default function ArchiveTable({
       </div>
 
       {/* Empty State */}
-      {archives.length === 0 && !loading && (
+      {peminjaman.length === 0 && !loading && (
         <div className="text-center py-12">
           <FileText className="mx-auto h-12 w-12 text-gray-400 mb-4" />
           <h3 className="text-lg font-medium text-gray-900 mb-2">
-            Tidak ada arsip ditemukan
+            Tidak ada peminjaman ditemukan
           </h3>
-          <p className="text-gray-500 mb-4">
-            {hasPeriodFilters || Object.keys(columnFilters).length > 0
-              ? "Coba ubah filter pencarian atau periode yang dipilih"
-              : "Coba ubah filter pencarian atau tambah arsip baru"}
+          <p className="text-gray-500">
+            {Object.keys(columnFilters).length > 0 || statusFilter
+              ? "Coba ubah filter pencarian atau status yang dipilih"
+              : "Belum ada data peminjaman"}
           </p>
           {hasPeriodFilters && (
             <button

@@ -76,9 +76,37 @@ export async function POST(req: Request) {
 
       for (const [index, row] of rows.entries()) {
         try {
-          if (!row["KODE UNIT"] || !row["NOMOR SURAT"] || !row["PERIHAL"]) {
+          // VALIDASI BARU: Skip baris yang hanya berisi angka/nomor urut
+          const isNumberedRow = Object.values(row).every((value) => {
+            if (value === null || value === undefined || value === "")
+              return false;
+            // Cek jika value adalah angka atau string yang hanya berisi angka
+            return !isNaN(Number(value)) && value.toString().trim() !== "";
+          });
+
+          if (isNumberedRow) {
+            console.log(
+              `Skipping numbered row in sheet ${sheetName}, row ${
+                index + headerRowIndex + 2
+              }`
+            );
+            continue; // Skip baris yang hanya berisi angka
+          }
+
+          // VALIDASI FLEKSIBEL: Terima NOMOR SURAT atau NOMOR NASKAH DINAS
+          const hasNomorSurat =
+            row["NOMOR SURAT"] && row["NOMOR SURAT"].toString().trim() !== "";
+          const hasNomorNaskahDinas =
+            row["NOMOR NASKAH DINAS"] &&
+            row["NOMOR NASKAH DINAS"].toString().trim() !== "";
+
+          if (
+            !row["KODE UNIT"] ||
+            (!hasNomorSurat && !hasNomorNaskahDinas) ||
+            !row["PERIHAL"]
+          ) {
             throw new Error(
-              "Kolom KODE UNIT, NOMOR SURAT, dan PERIHAL wajib diisi"
+              "Kolom KODE UNIT, (NOMOR SURAT atau NOMOR NASKAH DINAS), dan PERIHAL wajib diisi"
             );
           }
 
@@ -142,7 +170,10 @@ export async function POST(req: Request) {
               nomorIsiBerkas: row["NOMOR ISI BERKAS"]?.toString() || null,
               jenisNaskahDinas: row["JENIS NASKAH DINAS"]?.toString() || null,
               klasifikasi: row["KLASIFIKASI"]?.toString() || null,
-              nomorSurat: row["NOMOR SURAT"]?.toString() || "",
+              nomorSurat:
+                row["NOMOR SURAT"]?.toString() ||
+                row["NOMOR NASKAH DINAS"]?.toString() ||
+                "",
               tanggal: parseExcelDateToISOString(row["TANGGAL"]),
               perihal: row["PERIHAL"]?.toString() || "",
               tahun: row["TAHUN"]

@@ -1,50 +1,93 @@
-import { useState, useEffect } from "react";
-import {
-  ArchiveRecord,
-  ArchiveResponse,
-  ArchiveParams,
-  PaginationData,
-} from "@/types/archive";
-import { archiveAPI } from "@/services/archiveAPI";
+// hooks/useArchives.ts
+import useSWR from "swr";
+import { ArchiveRecord } from "@/types/archive";
 
-interface UseArchivesResult {
-  archives: ArchiveRecord[];
-  pagination: PaginationData | null;
-  loading: boolean;
-  error: string | null;
-  mutate: () => Promise<void>;
+interface UseArchivesParams {
+  page: number;
+  limit: number;
+  search?: string;
+  sort?: string;
+  order?: "asc" | "desc";
+  status?: string;
+  filters?: Record<string, string>;
+  // New period filter parameters
+  startMonth?: string;
+  endMonth?: string;
+  year?: string;
 }
 
-export function useArchives(params: ArchiveParams = {}): UseArchivesResult {
-  const [data, setData] = useState<ArchiveResponse | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const fetchData = async () => {
-    setLoading(true);
-    setError(null);
-
-    try {
-      const result = await archiveAPI.getArchives(params);
-      setData(result);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "An error occurred");
-      console.error("Error fetching archives:", err);
-    } finally {
-      setLoading(false);
-    }
+interface ArchiveResponse {
+  data: ArchiveRecord[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
   };
+}
 
-  // Fetch data when params change
-  useEffect(() => {
-    fetchData();
-  }, [JSON.stringify(params)]);
+const fetcher = (url: string) => fetch(url).then((res) => res.json());
+
+export function useArchives(params: UseArchivesParams) {
+  const {
+    page,
+    limit,
+    search = "",
+    sort = "tanggal",
+    order = "desc",
+    status = "",
+    filters = {},
+    startMonth = "",
+    endMonth = "",
+    year = "",
+  } = params;
+
+  // Build query parameters
+  const queryParams = new URLSearchParams({
+    page: page.toString(),
+    limit: limit.toString(),
+    search,
+    sort,
+    order,
+    status,
+  });
+
+  // Add period filters if provided
+  if (year) {
+    queryParams.append("year", year);
+  }
+  if (startMonth) {
+    queryParams.append("startMonth", startMonth);
+  }
+  if (endMonth) {
+    queryParams.append("endMonth", endMonth);
+  }
+
+  // Add column filters
+  Object.entries(filters).forEach(([key, value]) => {
+    if (value) {
+      queryParams.append(`filter[${key}]`, value);
+    }
+  });
+
+  const url = `/api/archives?${queryParams.toString()}`;
+
+  const { data, error, mutate, isValidating } = useSWR<ArchiveResponse>(
+    url,
+    fetcher,
+    {
+      revalidateOnFocus: false,
+      revalidateOnReconnect: true,
+      dedupingInterval: 5000,
+    }
+  );
 
   return {
     archives: data?.data || [],
     pagination: data?.pagination || null,
-    loading,
+    loading: !error && !data,
     error,
-    mutate: fetchData,
+    mutate,
+    isValidating,
   };
 }

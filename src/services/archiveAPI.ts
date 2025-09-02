@@ -4,6 +4,8 @@ import {
   ArchiveResponse,
   ArchiveParams,
   ImportResult,
+  PeminjamanFormData,
+  PeminjamanRecord,
 } from "@/types/archive";
 
 export const archiveAPI = {
@@ -93,6 +95,83 @@ export const archiveAPI = {
   async getAllArchives(): Promise<ArchiveRecord[]> {
     const res = await fetch("/api/archives/export");
     if (!res.ok) throw new Error("Failed to fetch all archives");
+    return res.json();
+  },
+
+  // ========== PEMINJAMAN METHODS ==========
+
+  // Create peminjaman
+  async createPeminjaman(data: PeminjamanFormData): Promise<PeminjamanRecord> {
+    const res = await fetch("/api/peminjaman", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(data),
+    });
+
+    if (!res.ok) {
+      const errorData = await res.json();
+      throw new Error(errorData.error || "Failed to create peminjaman");
+    }
+
+    return res.json();
+  },
+
+  // Get peminjaman by archive ID
+  async getPeminjamanByArchive(archiveId: string): Promise<PeminjamanRecord[]> {
+    const res = await fetch(`/api/peminjaman/archives/${archiveId}`);
+    if (!res.ok) throw new Error("Failed to fetch peminjaman");
+    return res.json();
+  },
+
+  // Get all peminjaman
+  async getAllPeminjaman(): Promise<PeminjamanRecord[]> {
+    const res = await fetch("/api/peminjaman");
+    if (!res.ok) throw new Error("Failed to fetch peminjaman");
+    const json = await res.json();
+    return Array.isArray(json) ? json : json.data || [];
+  },
+
+  // Get peminjaman with filters
+  async getPeminjaman(
+    params: Record<string, string | number> = {}
+  ): Promise<any> {
+    const searchParams = new URLSearchParams();
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && value !== "") {
+        searchParams.append(key, String(value));
+      }
+    });
+    const res = await fetch(`/api/peminjaman?${searchParams}`);
+    if (!res.ok) throw new Error("Failed to fetch peminjaman");
+    return res.json();
+  },
+
+  // Update peminjaman (untuk pengembalian)
+  async updatePeminjaman(
+    id: string,
+    data: Partial<PeminjamanFormData>
+  ): Promise<PeminjamanRecord> {
+    const res = await fetch(`/api/peminjaman/${id}`, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(data),
+    });
+
+    if (!res.ok) throw new Error("Failed to update peminjaman");
+    return res.json();
+  },
+
+  // Delete peminjaman
+  async deletePeminjaman(id: string): Promise<{ success: boolean }> {
+    const res = await fetch(`/api/peminjaman/${id}`, {
+      method: "DELETE",
+    });
+
+    if (!res.ok) throw new Error("Failed to delete peminjaman");
     return res.json();
   },
 };

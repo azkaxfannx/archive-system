@@ -1,44 +1,46 @@
-import { FileText, CheckCircle, AlertCircle, XCircle } from "lucide-react";
+"use client";
 
-interface StatsCardsProps {
+import { FileText, Clock, CheckCircle, AlertCircle } from "lucide-react";
+
+interface PeminjamanStatsCardsProps {
   totalCount: number;
-  activeCount: number;
-  inactiveCount: number;
-  disposeCount: number;
+  ongoingCount: number;
+  returnedCount: number;
+  overdueCount: number;
 }
 
-export default function StatsCards({
+export default function PeminjamanStatsCards({
   totalCount,
-  activeCount,
-  inactiveCount,
-  disposeCount,
-}: StatsCardsProps) {
+  ongoingCount,
+  returnedCount,
+  overdueCount,
+}: PeminjamanStatsCardsProps) {
   const stats = [
     {
-      name: "Total Arsip",
+      name: "Total Peminjaman",
       value: totalCount,
       icon: FileText,
       bgColor: "bg-blue-100",
       textColor: "text-blue-600",
     },
     {
-      name: "Aktif",
-      value: activeCount,
-      icon: CheckCircle,
+      name: "Sedang Dipinjam",
+      value: ongoingCount,
+      icon: Clock,
       bgColor: "bg-green-100",
       textColor: "text-green-600",
     },
     {
-      name: "Inaktif",
-      value: inactiveCount,
-      icon: AlertCircle,
-      bgColor: "bg-yellow-100",
-      textColor: "text-yellow-600",
+      name: "Sudah Kembali",
+      value: returnedCount,
+      icon: CheckCircle,
+      bgColor: "bg-emerald-100",
+      textColor: "text-emerald-600",
     },
     {
-      name: "Siap Musnah",
-      value: disposeCount,
-      icon: XCircle,
+      name: "Terlambat",
+      value: overdueCount,
+      icon: AlertCircle,
       bgColor: "bg-red-100",
       textColor: "text-red-600",
     },

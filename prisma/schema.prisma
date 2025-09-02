@@ -1,6 +1,5 @@
 // This is your Prisma schema file,
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 // Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
 // Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
 
@@ -14,7 +13,7 @@ datasource db {
 }
 
 model Archive {
-  id                  String   @id @default(uuid())
+  id                  String       @id @default(uuid())
   kodeUnit            String?
   indeks              String?
   nomorBerkas         String?
@@ -33,9 +32,30 @@ model Archive {
   keterangan          String?
   entryDate           DateTime
   retentionYears      Int
-  status              Status    @default(ACTIVE)
+  status              Status       @default(ACTIVE)
+  createdAt           DateTime     @default(now())
+  updatedAt           DateTime     @updatedAt
+  
+  // Relasi dengan Peminjaman
+  peminjaman          Peminjaman[]
+}
+
+model Peminjaman {
+  id                  String    @id @default(uuid())
+  nomorSurat          String    @unique
+  peminjam            String
+  keperluan           String
+  tanggalPinjam       DateTime
+  tanggalHarusKembali DateTime
+  tanggalPengembalian DateTime?
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
+  
+  // Foreign key untuk relasi dengan Archive
+  archiveId           String
+  archive             Archive   @relation(fields: [archiveId], references: [id], onDelete: Cascade)
+  
+  @@map("peminjaman")
 }
 
 enum Status {
