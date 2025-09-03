@@ -97,16 +97,20 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check if nomorSurat is unique
-    const existingPeminjaman = await prisma.peminjaman.findUnique({
-      where: { nomorSurat: data.nomorSurat },
+    // Check if nomorSurat is already being used for ACTIVE peminjaman (belum dikembalikan)
+    const activePeminjaman = await prisma.peminjaman.findFirst({
+      where: {
+        nomorSurat: data.nomorSurat,
+        tanggalPengembalian: null, // Belum dikembalikan
+      },
     });
 
-    if (existingPeminjaman) {
+    if (activePeminjaman) {
       return NextResponse.json(
         {
           success: false,
-          error: "Nomor surat peminjaman sudah digunakan",
+          error:
+            "Nomor surat peminjaman masih digunakan untuk peminjaman yang belum dikembalikan",
         },
         { status: 400 }
       );

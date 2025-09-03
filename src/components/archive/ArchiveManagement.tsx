@@ -26,6 +26,64 @@ import ExportResultModal from "../ui/modal/ExportResultModal";
 import ImportResultModal from "../ui/modal/ImportResultModal";
 import DeleteConfirmationModal from "../ui/modal/DeleteConfirmationModal";
 
+// Error Modal Component for Peminjaman
+const PeminjamanErrorModal = ({
+  isOpen,
+  onClose,
+  message,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  message: string;
+}) => {
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 overflow-y-auto">
+      <div className="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+        <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity"></div>
+
+        <div className="inline-block align-bottom bg-white rounded-lg px-4 pt-5 pb-4 text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full sm:p-6">
+          <div className="sm:flex sm:items-start">
+            <div className="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-red-100 sm:mx-0 sm:h-10 sm:w-10">
+              <svg
+                className="h-6 w-6 text-red-600"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.728-.833-2.498 0L3.316 16.5c-.77.833.192 2.5 1.732 2.5z"
+                />
+              </svg>
+            </div>
+            <div className="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left">
+              <h3 className="text-lg leading-6 font-medium text-gray-900">
+                Arsip Sedang Dipinjam
+              </h3>
+              <div className="mt-2">
+                <p className="text-sm text-gray-500">{message}</p>
+              </div>
+            </div>
+          </div>
+          <div className="mt-5 sm:mt-4 sm:flex sm:flex-row-reverse">
+            <button
+              type="button"
+              onClick={onClose}
+              className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-blue-600 text-base font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:ml-3 sm:w-auto sm:text-sm"
+            >
+              OK
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 export default function ArchiveManagement() {
   // State management
   const [currentPage, setCurrentPage] = useState(1);
@@ -83,6 +141,11 @@ export default function ArchiveManagement() {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
+  // Peminjaman Error Modal
+  const [showPeminjamanErrorModal, setShowPeminjamanErrorModal] =
+    useState(false);
+  const [peminjamanErrorMessage, setPeminjamanErrorMessage] = useState("");
+
   // Fetch archives with period filters
   const { archives, pagination, loading, error, mutate } = useArchives({
     page: currentPage,
@@ -100,9 +163,15 @@ export default function ArchiveManagement() {
 
   // Header refresh trigger
   const [headerRefreshTrigger, setHeaderRefreshTrigger] = useState(0);
+  // Table refresh trigger for peminjaman status
+  const [tableRefreshTrigger, setTableRefreshTrigger] = useState(0);
 
   const triggerHeaderRefresh = () => {
     setHeaderRefreshTrigger((prev) => prev + 1);
+  };
+
+  const triggerTableRefresh = () => {
+    setTableRefreshTrigger((prev) => prev + 1);
   };
 
   // Handle period filter changes
@@ -311,21 +380,53 @@ export default function ArchiveManagement() {
     setShowPeminjamanForm(true);
   };
 
+  // FIXED: Enhanced handleSavePeminjaman with consistent error handling and refresh trigger
   const handleSavePeminjaman = async (formData: PeminjamanFormData) => {
     setIsLoading(true);
     try {
+      console.log("Creating peminjaman with data:", formData);
       await archiveAPI.createPeminjaman(formData);
       setSuccessMessage("Peminjaman berkas berhasil dibuat!");
 
       setShowPeminjamanForm(false);
       setSelectedArchive(null);
-      mutate(); // Refresh archives if needed
+
+      // Trigger refresh untuk update status peminjaman di table
+      triggerTableRefresh();
 
       // Tampilkan modal sukses
       setShowSuccessModal(true);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error creating peminjaman:", error);
-      alert("Terjadi kesalahan saat membuat peminjaman!");
+
+      // Log detailed error information for debugging
+      console.log("Error details:", {
+        status: error?.response?.status,
+        data: error?.response?.data,
+        message: error?.message,
+      });
+
+      // Check if it's a 400 error with specific message about duplicate nomorSurat
+      const isConflictError = error?.response?.status === 400;
+      const errorMessage = error?.response?.data?.error || error?.message || "";
+      const isDuplicateNomorSurat = errorMessage.includes(
+        "Nomor surat peminjaman masih digunakan"
+      );
+
+      if (isConflictError && isDuplicateNomorSurat) {
+        // Show custom modal for peminjaman conflict
+        console.log("Showing peminjaman error modal");
+        setPeminjamanErrorMessage(
+          "Nomor surat ini masih digunakan untuk peminjaman yang belum dikembalikan. " +
+            "Silakan gunakan nomor surat yang berbeda atau tunggu hingga peminjaman sebelumnya dikembalikan."
+        );
+        setShowPeminjamanErrorModal(true);
+      } else {
+        // Show generic error for other cases
+        const fallbackMessage = "Terjadi kesalahan saat membuat peminjaman!";
+        const displayMessage = errorMessage || fallbackMessage;
+        alert(displayMessage);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -343,6 +444,14 @@ export default function ArchiveManagement() {
   useEffect(() => {
     console.log("Period filters changed:", periodFilters);
   }, [periodFilters]);
+
+  // Debug modal state
+  useEffect(() => {
+    console.log("Peminjaman error modal state:", {
+      showPeminjamanErrorModal,
+      peminjamanErrorMessage,
+    });
+  }, [showPeminjamanErrorModal, peminjamanErrorMessage]);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -378,7 +487,7 @@ export default function ArchiveManagement() {
             setSelectedArchive(archive);
             setShowDetailModal(true);
           }}
-          onPinjam={(archive) => handlePinjamArchive(archive)} // Tambahkan ini
+          onPinjam={(archive) => handlePinjamArchive(archive)}
           onSort={handleSort}
           sortField={sortField}
           sortOrder={sortOrder}
@@ -392,6 +501,7 @@ export default function ArchiveManagement() {
           columnFilters={columnFilters}
           periodFilters={periodFilters}
           onPeriodFilterChange={handlePeriodFilterChange}
+          refreshTrigger={tableRefreshTrigger}
         />
 
         {/* Pagination */}
@@ -476,6 +586,13 @@ export default function ArchiveManagement() {
         isOpen={showSuccessModal}
         message={successMessage}
         onClose={() => setShowSuccessModal(false)}
+      />
+
+      {/* Peminjaman Error Modal */}
+      <PeminjamanErrorModal
+        isOpen={showPeminjamanErrorModal}
+        onClose={() => setShowPeminjamanErrorModal(false)}
+        message={peminjamanErrorMessage}
       />
     </div>
   );

@@ -9,6 +9,7 @@ import PeminjamanTable from "./PeminjamanTable";
 import { PeminjamanRecord, PeminjamanFormData } from "@/types/archive";
 import { archiveAPI } from "@/services/archiveAPI";
 import * as XLSX from "xlsx";
+import SuccessModal from "../ui/modal/SuccessModal";
 import PeminjamanEditForm from "./PeminjamanEditForm";
 import ReturnConfirmationModal from "./ReturnConfirmationModal";
 
@@ -30,6 +31,9 @@ export default function PeminjamanManagement() {
     endMonth: "",
     year: "",
   });
+
+  const [successMessage, setSuccessMessage] = useState("");
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
 
   // edit modal
   const [editingItem, setEditingItem] = useState<PeminjamanRecord | null>(null);
@@ -95,6 +99,10 @@ export default function PeminjamanManagement() {
       await fetchStats();
       triggerHeaderRefresh();
       setEditingItem(null);
+
+      // ✅ tampilkan modal sukses
+      setSuccessMessage("Data peminjaman berhasil diperbarui.");
+      setShowSuccessModal(true);
     } catch (err) {
       console.error("Error updating peminjaman:", err);
     } finally {
@@ -120,6 +128,10 @@ export default function PeminjamanManagement() {
       await fetchStats();
       triggerHeaderRefresh();
       setReturningItem(null);
+
+      // ✅ tampilkan modal sukses
+      setSuccessMessage("Berkas berhasil dikembalikan.");
+      setShowSuccessModal(true);
     } catch (err) {
       console.error("Error mengembalikan peminjaman:", err);
     } finally {
@@ -308,6 +320,13 @@ export default function PeminjamanManagement() {
           judulBerkas={returningItem.archive?.judulBerkas}
         />
       )}
+
+      {/* ✅ Success Modal */}
+      <SuccessModal
+        isOpen={showSuccessModal}
+        message={successMessage}
+        onClose={() => setShowSuccessModal(false)}
+      />
     </div>
   );
 }

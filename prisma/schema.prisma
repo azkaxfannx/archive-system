@@ -42,7 +42,7 @@ model Archive {
 
 model Peminjaman {
   id                  String    @id @default(uuid())
-  nomorSurat          String    @unique
+  nomorSurat          String
   peminjam            String
   keperluan           String
   tanggalPinjam       DateTime

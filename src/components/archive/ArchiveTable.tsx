@@ -42,6 +42,7 @@ interface ArchiveTableProps {
   onExport: () => void;
   periodFilters: PeriodFilters;
   onPeriodFilterChange: (field: keyof PeriodFilters, value: string) => void;
+  refreshTrigger?: number;
 }
 
 const TABLE_HEADERS = [
@@ -92,9 +93,61 @@ export default function ArchiveTable({
   onExport,
   periodFilters,
   onPeriodFilterChange,
+  refreshTrigger = 0,
 }: ArchiveTableProps) {
   const [showFilters, setShowFilters] = useState(false);
   const [showPeriodFilters, setShowPeriodFilters] = useState(false);
+  const [activePeminjaman, setActivePeminjaman] = useState<
+    Record<string, boolean>
+  >({});
+
+  // Fetch active peminjaman status for all archives
+  useEffect(() => {
+    const fetchActivePeminjaman = async () => {
+      try {
+        const archiveIds = archives.map((archive) => archive.id);
+        if (archiveIds.length === 0) {
+          setActivePeminjaman({});
+          return;
+        }
+
+        // Check each archive for active peminjaman
+        const promises = archiveIds.map(async (archiveId) => {
+          const response = await fetch(
+            `/api/peminjaman?archiveId=${archiveId}`
+          );
+          const result = await response.json();
+
+          if (result.success && result.data) {
+            // Check if there's any active peminjaman (tanggalPengembalian is null)
+            const hasActivePeminjaman = result.data.some(
+              (p: any) => p.tanggalPengembalian === null
+            );
+            return { archiveId, hasActivePeminjaman };
+          }
+          return { archiveId, hasActivePeminjaman: false };
+        });
+
+        const results = await Promise.all(promises);
+        const activePeminjamanMap = results.reduce(
+          (acc, { archiveId, hasActivePeminjaman }) => {
+            acc[archiveId] = hasActivePeminjaman;
+            return acc;
+          },
+          {} as Record<string, boolean>
+        );
+
+        setActivePeminjaman(activePeminjamanMap);
+      } catch (error) {
+        console.error("Error fetching active peminjaman:", error);
+        setActivePeminjaman({});
+      }
+    };
+
+    if (archives.length > 0) {
+      fetchActivePeminjaman();
+    }
+  }, [archives, refreshTrigger]); // refreshTrigger as dependency
 
   const getSortIcon = (field: string) => {
     if (sortField !== field) {
@@ -202,6 +255,11 @@ export default function ArchiveTable({
     } catch (error) {
       return "-";
     }
+  };
+
+  // Helper function to check if archive can be borrowed
+  const canBorrow = (archiveId: string) => {
+    return !activePeminjaman[archiveId];
   };
 
   if (loading) {
@@ -403,23 +461,6 @@ export default function ArchiveTable({
                 placeholder="Filter..."
               />
             </div>
-            {/* <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">
-                Lokasi Simpan
-              </label>
-              <input
-                ref={inputRefs.lokasiSimpan}
-                type="text"
-                value={
-                  localFilters.lokasiSimpan || columnFilters.lokasiSimpan || ""
-                }
-                onChange={(e) =>
-                  handleInputChange("lokasiSimpan", e.target.value)
-                }
-                className="w-full text-sm border border-gray-300 rounded px-2 py-1 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="Filter..."
-              />
-            </div> */}
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">
                 Jenis
@@ -495,12 +536,17 @@ export default function ArchiveTable({
                 key={archive.id}
                 className={`hover:bg-blue-50 transition-colors ${getRowColorClass(
                   index
-                )}`}
+                )} ${!canBorrow(archive.id) ? "bg-red-50" : ""}`}
               >
                 {/* No. Surat */}
                 <td className="px-6 py-4 whitespace-nowrap">
                   <div className="text-sm font-medium text-gray-900">
                     {archive.nomorSurat}
+                    {!canBorrow(archive.id) && (
+                      <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800">
+                        Sedang Dipinjam
+                      </span>
+                    )}
                   </div>
                   <div className="text-sm text-gray-500 truncate max-w-32">
                     {archive.klasifikasi}
@@ -567,13 +613,26 @@ export default function ArchiveTable({
                     >
                       <Eye size={16} />
                     </button>
-                    <button
-                      onClick={() => onPinjam(archive)}
-                      className="text-orange-600 hover:text-orange-900 p-1 rounded hover:bg-orange-50 transition-colors"
-                      title="Pinjam Berkas"
-                    >
-                      <BookOpen size={16} />
-                    </button>
+
+                    {/* Conditional Pinjam Button */}
+                    {canBorrow(archive.id) ? (
+                      <button
+                        onClick={() => onPinjam(archive)}
+                        className="text-orange-600 hover:text-orange-900 p-1 rounded hover:bg-orange-50 transition-colors"
+                        title="Pinjam Berkas"
+                      >
+                        <BookOpen size={16} />
+                      </button>
+                    ) : (
+                      <button
+                        disabled
+                        className="text-gray-400 p-1 rounded cursor-not-allowed"
+                        title="Arsip sedang dipinjam"
+                      >
+                        <BookOpen size={16} />
+                      </button>
+                    )}
+
                     <button
                       onClick={() => onEdit(archive)}
                       className="text-green-600 hover:text-green-900 p-1 rounded hover:bg-green-50 transition-colors"
