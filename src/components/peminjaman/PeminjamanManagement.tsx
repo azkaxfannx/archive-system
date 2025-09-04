@@ -265,8 +265,8 @@ export default function PeminjamanManagement() {
     <div className="min-h-screen bg-gray-50">
       {/* Header (samakan dengan ArchiveManagement) */}
       <Header
-        user={{ id: "1", name: "Admin" }}
-        onLogout={() => alert("Logout!")}
+        // user={{ id: "1", name: "Admin" }}
+        // onLogout={() => alert("Logout!")}
         refreshTrigger={headerRefreshTrigger}
       />
 
