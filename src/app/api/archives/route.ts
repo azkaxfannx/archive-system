@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
+import { requireAuth } from "@/utils/withAuth";
 
 // GET - Fetch archives with pagination and filters
 export async function GET(req: NextRequest) {
   try {
+    const { user, error } = requireAuth(req);
+    if (error) return error;
+
     const { searchParams } = new URL(req.url);
 
     const page = parseInt(searchParams.get("page") || "1");
@@ -130,14 +134,23 @@ export async function GET(req: NextRequest) {
 
     const skip = (page - 1) * limit;
 
+    const userFilter = user.role === "ADMIN" ? {} : { userId: user.userId };
+
+    const finalWhere: Prisma.ArchiveWhereInput = {
+      ...where,
+      ...userFilter,
+    };
+
     const [archives, total] = await Promise.all([
       prisma.archive.findMany({
-        where,
+        where: finalWhere,
         orderBy,
         skip,
         take: limit,
       }),
-      prisma.archive.count({ where }),
+      prisma.archive.count({
+        where: finalWhere,
+      }),
     ]);
 
     return NextResponse.json({
@@ -161,6 +174,9 @@ export async function GET(req: NextRequest) {
 // POST - Create new archive
 export async function POST(req: NextRequest) {
   try {
+    const { user, error } = requireAuth(req);
+    if (error) return error;
+
     const data = await req.json();
 
     const archive = await prisma.archive.create({
@@ -184,6 +200,7 @@ export async function POST(req: NextRequest) {
         entryDate: data.entryDate ? new Date(data.entryDate) : new Date(),
         retentionYears: data.retentionYears || 2,
         status: data.status || "ACTIVE",
+        userId: user.userId,
       },
     });
 

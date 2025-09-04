@@ -101,6 +101,14 @@ export default function ArchiveTable({
     Record<string, boolean>
   >({});
 
+  // Local filter state yang sama dengan PeminjamanTable
+  const [localFilters, setLocalFilters] = useState<Record<string, string>>({});
+  const debounceRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    setLocalFilters(columnFilters);
+  }, [columnFilters]);
+
   // Fetch active peminjaman status for all archives
   useEffect(() => {
     const fetchActivePeminjaman = async () => {
@@ -147,7 +155,7 @@ export default function ArchiveTable({
     if (archives.length > 0) {
       fetchActivePeminjaman();
     }
-  }, [archives, refreshTrigger]); // refreshTrigger as dependency
+  }, [archives, refreshTrigger]);
 
   const getSortIcon = (field: string) => {
     if (sortField !== field) {
@@ -160,33 +168,18 @@ export default function ArchiveTable({
     );
   };
 
-  const inputRefs = {
-    nomorSurat: useRef<HTMLInputElement>(null),
-    judulBerkas: useRef<HTMLInputElement>(null),
-    lokasiSimpan: useRef<HTMLInputElement>(null),
-  };
-
-  const selectRefs = {
-    jenisNaskahDinas: useRef<HTMLSelectElement>(null),
-  };
-
-  const [focusedColumn, setFocusedColumn] = useState<string | null>(null);
-  const [localFilters, setLocalFilters] = useState<Record<string, string>>({});
-
+  // Handler yang sama dengan PeminjamanTable - dengan debounce 300ms
   const handleInputChange = (column: string, value: string) => {
     setLocalFilters((prev) => ({ ...prev, [column]: value }));
-    setFocusedColumn(column);
-  };
 
-  useEffect(() => {
-    const timeout = setTimeout(() => {
-      Object.entries(localFilters).forEach(([col, val]) => {
-        onColumnFilter(col, val);
-      });
+    if (debounceRef.current) {
+      clearTimeout(debounceRef.current);
+    }
+
+    debounceRef.current = setTimeout(() => {
+      onColumnFilter(column, value);
     }, 300);
-
-    return () => clearTimeout(timeout);
-  }, [localFilters]);
+  };
 
   // Generate years for dropdown (current year ± 10 years)
   const generateYears = () => {
@@ -261,10 +254,6 @@ export default function ArchiveTable({
   const canBorrow = (archiveId: string) => {
     return !activePeminjaman[archiveId];
   };
-
-  if (loading) {
-    return <LoadingSpinner />;
-  }
 
   return (
     <div className="bg-white rounded-lg shadow overflow-hidden">
@@ -423,16 +412,15 @@ export default function ArchiveTable({
         </div>
       )}
 
-      {/* Column Filters */}
+      {/* Column Filters - Diperbaiki seperti PeminjamanTable */}
       {showFilters && (
         <div className="px-6 py-4 bg-gray-50 border-b">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">
                 Nomor Surat
               </label>
               <input
-                ref={inputRefs.nomorSurat}
                 type="text"
                 value={
                   localFilters.nomorSurat || columnFilters.nomorSurat || ""
@@ -441,15 +429,15 @@ export default function ArchiveTable({
                   handleInputChange("nomorSurat", e.target.value)
                 }
                 className="w-full text-sm border border-gray-300 rounded px-2 py-1 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="Filter..."
+                placeholder="Filter nomor surat..."
               />
             </div>
+
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">
                 Judul Berkas
               </label>
               <input
-                ref={inputRefs.judulBerkas}
                 type="text"
                 value={
                   localFilters.judulBerkas || columnFilters.judulBerkas || ""
@@ -458,15 +446,32 @@ export default function ArchiveTable({
                   handleInputChange("judulBerkas", e.target.value)
                 }
                 className="w-full text-sm border border-gray-300 rounded px-2 py-1 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="Filter..."
+                placeholder="Filter judul berkas..."
               />
             </div>
+
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">
-                Jenis
+                Lokasi Simpan
+              </label>
+              <input
+                type="text"
+                value={
+                  localFilters.lokasiSimpan || columnFilters.lokasiSimpan || ""
+                }
+                onChange={(e) =>
+                  handleInputChange("lokasiSimpan", e.target.value)
+                }
+                className="w-full text-sm border border-gray-300 rounded px-2 py-1 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="Filter lokasi simpan..."
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">
+                Jenis Naskah
               </label>
               <select
-                ref={selectRefs.jenisNaskahDinas}
                 value={
                   localFilters.jenisNaskahDinas ||
                   columnFilters.jenisNaskahDinas ||
@@ -482,8 +487,11 @@ export default function ArchiveTable({
                 <option value="Surat Keluar">Surat Keluar</option>
                 <option value="Memo">Memo</option>
                 <option value="Laporan">Laporan</option>
+                <option value="SK">SK</option>
+                <option value="Notulen">Notulen</option>
               </select>
             </div>
+
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">
                 Status
@@ -505,6 +513,11 @@ export default function ArchiveTable({
 
       {/* Table */}
       <div className="overflow-x-auto">
+        {loading && (
+          <div className="absolute inset-0 flex items-center justify-center bg-white/70 z-10">
+            <LoadingSpinner />
+          </div>
+        )}
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>

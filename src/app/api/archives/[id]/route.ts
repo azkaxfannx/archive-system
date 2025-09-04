@@ -1,15 +1,40 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { requireAuth } from "@/utils/withAuth";
 
 interface RouteParams {
-  params: { id: string };
+  params: Promise<{ id: string }>;
+}
+
+async function canAccessArchive(
+  id: string,
+  user?: { userId: string; role: "ADMIN" | "USER" }
+) {
+  if (!user) return false; // kalau gak ada user, pasti gak boleh
+  if (user.role === "ADMIN") return true;
+
+  const arch = await prisma.archive.findUnique({
+    where: { id },
+    select: { userId: true },
+  });
+
+  return arch?.userId === user.userId;
 }
 
 // GET - Get single archive
 export async function GET(req: NextRequest, { params }: RouteParams) {
   try {
+    const { user, error } = requireAuth(req);
+    if (error) return error;
+
+    const { id } = await params; // Await the params Promise
+
+    if (!(await canAccessArchive(id, user))) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
     const archive = await prisma.archive.findUnique({
-      where: { id: params.id },
+      where: { id },
     });
 
     if (!archive) {
@@ -29,10 +54,19 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
 // PUT - Update archive
 export async function PUT(req: NextRequest, { params }: RouteParams) {
   try {
+    const { user, error } = requireAuth(req);
+    if (error) return error;
+
+    const { id } = await params; // Await the params Promise
+
+    if (!(await canAccessArchive(id, user))) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
     const data = await req.json();
 
     const archive = await prisma.archive.update({
-      where: { id: params.id },
+      where: { id },
       data: {
         kodeUnit: data.kodeUnit || undefined,
         indeks: data.indeks || undefined,
@@ -77,8 +111,17 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
 // DELETE - Delete archive
 export async function DELETE(req: NextRequest, { params }: RouteParams) {
   try {
+    const { user, error } = requireAuth(req);
+    if (error) return error;
+
+    const { id } = await params; // Await the params Promise
+
+    if (!(await canAccessArchive(id, user))) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
     await prisma.archive.delete({
-      where: { id: params.id },
+      where: { id },
     });
 
     return NextResponse.json({ success: true });

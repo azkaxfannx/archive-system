@@ -1,8 +1,4 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
+// prisma/schema.prisma
 generator client {
   provider = "prisma-client-js"
 }
@@ -10,6 +6,18 @@ generator client {
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String    @id @default(uuid())
+  name      String
+  email     String    @unique
+  password  String    // simpan hash!
+  role      Role      @default(USER)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  archives  Archive[]
 }
 
 model Archive {
@@ -35,8 +43,12 @@ model Archive {
   status              Status       @default(ACTIVE)
   createdAt           DateTime     @default(now())
   updatedAt           DateTime     @updatedAt
-  
-  // Relasi dengan Peminjaman
+
+  // Owner (pengupload)
+  userId              String
+  user                User         @relation(fields: [userId], references: [id])
+
+  // Relasi Peminjaman
   peminjaman          Peminjaman[]
 }
 
@@ -50,11 +62,10 @@ model Peminjaman {
   tanggalPengembalian DateTime?
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
-  
-  // Foreign key untuk relasi dengan Archive
+
   archiveId           String
   archive             Archive   @relation(fields: [archiveId], references: [id], onDelete: Cascade)
-  
+
   @@map("peminjaman")
 }
 
@@ -62,4 +73,9 @@ enum Status {
   ACTIVE
   INACTIVE
   DISPOSE_ELIGIBLE
+}
+
+enum Role {
+  ADMIN
+  USER
 }

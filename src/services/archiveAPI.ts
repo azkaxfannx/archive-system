@@ -27,7 +27,9 @@ export const archiveAPI = {
       });
     }
 
-    const res = await fetch(`/api/archives?${searchParams}`);
+    const res = await fetch(`/api/archives?${searchParams}`, {
+      credentials: "include",
+    });
     if (!res.ok) throw new Error("Failed to fetch archives");
     return res.json();
   },
@@ -36,6 +38,7 @@ export const archiveAPI = {
   async createArchive(data: ArchiveFormData): Promise<ArchiveRecord> {
     const res = await fetch("/api/archives", {
       method: "POST",
+      credentials: "include",
       headers: {
         "Content-Type": "application/json",
       },
@@ -53,6 +56,7 @@ export const archiveAPI = {
   ): Promise<ArchiveRecord> {
     const res = await fetch(`/api/archives/${id}`, {
       method: "PUT",
+      credentials: "include",
       headers: {
         "Content-Type": "application/json",
       },
@@ -67,6 +71,7 @@ export const archiveAPI = {
   async deleteArchive(id: string): Promise<{ success: boolean }> {
     const res = await fetch(`/api/archives/${id}`, {
       method: "DELETE",
+      credentials: "include",
     });
 
     if (!res.ok) throw new Error("Failed to delete archive");
@@ -80,6 +85,7 @@ export const archiveAPI = {
 
     const res = await fetch("/api/archives/import", {
       method: "POST",
+      credentials: "include",
       body: formData,
     });
 
@@ -93,7 +99,7 @@ export const archiveAPI = {
 
   // Get all archives (for export)
   async getAllArchives(): Promise<ArchiveRecord[]> {
-    const res = await fetch("/api/archives/export");
+    const res = await fetch("/api/archives/export", { credentials: "include" });
     if (!res.ok) throw new Error("Failed to fetch all archives");
     return res.json();
   },
@@ -104,6 +110,7 @@ export const archiveAPI = {
   async createPeminjaman(data: PeminjamanFormData): Promise<PeminjamanRecord> {
     const res = await fetch("/api/peminjaman", {
       method: "POST",
+      credentials: "include",
       headers: {
         "Content-Type": "application/json",
       },
@@ -120,14 +127,16 @@ export const archiveAPI = {
 
   // Get peminjaman by archive ID
   async getPeminjamanByArchive(archiveId: string): Promise<PeminjamanRecord[]> {
-    const res = await fetch(`/api/peminjaman/archives/${archiveId}`);
+    const res = await fetch(`/api/peminjaman/archives/${archiveId}`, {
+      credentials: "include",
+    });
     if (!res.ok) throw new Error("Failed to fetch peminjaman");
     return res.json();
   },
 
   // Get all peminjaman
   async getAllPeminjaman(): Promise<PeminjamanRecord[]> {
-    const res = await fetch("/api/peminjaman");
+    const res = await fetch("/api/peminjaman", { credentials: "include" });
     if (!res.ok) throw new Error("Failed to fetch peminjaman");
     const json = await res.json();
     return Array.isArray(json) ? json : json.data || [];
@@ -143,7 +152,9 @@ export const archiveAPI = {
         searchParams.append(key, String(value));
       }
     });
-    const res = await fetch(`/api/peminjaman?${searchParams}`);
+    const res = await fetch(`/api/peminjaman?${searchParams}`, {
+      credentials: "include",
+    });
     if (!res.ok) throw new Error("Failed to fetch peminjaman");
     return res.json();
   },
@@ -155,6 +166,7 @@ export const archiveAPI = {
   ): Promise<PeminjamanRecord> {
     const res = await fetch(`/api/peminjaman/${id}`, {
       method: "PUT",
+      credentials: "include",
       headers: {
         "Content-Type": "application/json",
       },
@@ -169,6 +181,7 @@ export const archiveAPI = {
   async deletePeminjaman(id: string): Promise<{ success: boolean }> {
     const res = await fetch(`/api/peminjaman/${id}`, {
       method: "DELETE",
+      credentials: "include",
     });
 
     if (!res.ok) throw new Error("Failed to delete peminjaman");

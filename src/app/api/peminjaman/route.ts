@@ -1,15 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { requireAuth } from "@/utils/withAuth";
 
 // GET - Get all peminjaman or by archiveId
 export async function GET(request: NextRequest) {
   try {
+    const { user, error } = requireAuth(request);
+    if (error) return error;
+
     const { searchParams } = new URL(request.url);
     const archiveId = searchParams.get("archiveId");
     const peminjam = searchParams.get("peminjam");
 
     // Build where condition
-    const where: any = {};
+    const where: any =
+      user.role === "ADMIN" ? {} : { archive: { userId: user.userId } };
     if (archiveId) where.archiveId = archiveId;
     if (peminjam) {
       where.peminjam = {
@@ -60,7 +65,23 @@ export async function GET(request: NextRequest) {
 // POST - Create new peminjaman
 export async function POST(request: NextRequest) {
   try {
+    const { user, error } = requireAuth(request);
+    if (error) return error;
+
     const data = await request.json();
+
+    if (user.role !== "ADMIN") {
+      const archive = await prisma.archive.findFirst({
+        where: { id: data.archiveId, userId: user.userId }, // ✅ ambil dari data
+        select: { id: true },
+      });
+      if (!archive) {
+        return NextResponse.json(
+          { error: "Tidak boleh meminjam arsip yang bukan milikmu" },
+          { status: 403 }
+        );
+      }
+    }
 
     // Validate required fields
     const requiredFields = [

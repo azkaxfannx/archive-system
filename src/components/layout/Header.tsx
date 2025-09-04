@@ -1,29 +1,26 @@
+"use client";
+
 import { FileText, Clock, User, LogOut } from "lucide-react";
-import { User as UserType } from "@/types/archive";
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { User as UserType } from "@/types/archive";
 
 interface HeaderProps {
-  user?: UserType;
-  onLogout: () => void;
-  refreshTrigger?: number; // Optional trigger untuk refresh external
+  refreshTrigger?: number;
 }
 
-export default function Header({
-  user,
-  onLogout,
-  refreshTrigger,
-}: HeaderProps) {
+export default function Header({ refreshTrigger }: HeaderProps) {
   const [lastUpdate, setLastUpdate] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState<UserType | null>(null);
+  const router = useRouter();
 
   const fetchLastUpdate = async () => {
     try {
       setLoading(true);
       const response = await fetch("/api/archives/latest");
-
       if (response.ok) {
         const data = await response.json();
-
         if (data.lastEntryDate) {
           const date = new Date(data.lastEntryDate);
           const formattedDate = date.toLocaleString("id-ID", {
@@ -50,16 +47,56 @@ export default function Header({
     }
   };
 
+  const fetchUser = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      if (!token) {
+        setUser(null);
+        router.push("/login");
+        return;
+      }
+
+      const res = await fetch("/api/auth/me", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setUser(data.user);
+      } else {
+        setUser(null);
+        localStorage.removeItem("token");
+        router.push("/login");
+      }
+    } catch (error) {
+      console.error("Fetch user error:", error);
+      setUser(null);
+      localStorage.removeItem("token");
+      router.push("/login");
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      await fetch("/api/auth/logout", { method: "POST" });
+    } catch (error) {
+      console.error("Logout error:", error);
+    } finally {
+      localStorage.removeItem("token");
+      setUser(null);
+      router.push("/login");
+    }
+  };
+
   useEffect(() => {
+    fetchUser();
     fetchLastUpdate();
 
-    // Refresh setiap 30 detik untuk update realtime
     const interval = setInterval(fetchLastUpdate, 30000);
-
     return () => clearInterval(interval);
-  }, [refreshTrigger]); // Re-fetch ketika refreshTrigger berubah
-
-  // Removed the old onDataRefresh effect
+  }, [refreshTrigger]);
 
   return (
     <div className="bg-white shadow-sm border-b">
@@ -89,7 +126,6 @@ export default function Header({
                 )}
               </span>
 
-              {/* Manual refresh button */}
               <button
                 onClick={fetchLastUpdate}
                 className="ml-2 text-blue-600 hover:text-blue-800 transition-colors"
@@ -108,17 +144,22 @@ export default function Header({
             </div>
 
             {user && (
-              <div className="flex items-center space-x-2 border-l border-gray-300 pl-4">
-                <User size={20} className="text-gray-500" />
-                <span className="text-sm font-medium">
-                  {user.name || "Admin"}
-                </span>
+              <div className="flex items-center space-x-3 border-l border-gray-300 pl-4">
+                <div className="flex items-center space-x-2">
+                  <User size={20} className="text-gray-500" />
+                  <span className="text-sm font-medium text-gray-700">
+                    {user.name || "Admin"}
+                  </span>
+                </div>
                 <button
-                  onClick={onLogout}
-                  className="text-gray-500 hover:text-gray-700 p-1 rounded transition-colors"
+                  onClick={handleLogout}
+                  className="flex items-center space-x-1 text-gray-500 hover:text-red-600 px-2 py-1 rounded transition-colors group"
                   title="Logout"
                 >
-                  <LogOut size={16} />
+                  <LogOut size={16} className="group-hover:text-red-600" />
+                  <span className="text-xs group-hover:text-red-600">
+                    Logout
+                  </span>
                 </button>
               </div>
             )}

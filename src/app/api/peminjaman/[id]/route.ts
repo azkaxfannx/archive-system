@@ -1,16 +1,37 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { requireAuth } from "@/utils/withAuth";
 
 interface RouteParams {
-  params: {
+  params: Promise<{
     id: string;
-  };
+  }>;
+}
+
+async function canAccessPinjaman(
+  id: string,
+  user: { userId: string; role: "ADMIN" | "USER" }
+) {
+  if (user.role === "ADMIN") return true;
+  const pinjam = await prisma.peminjaman.findUnique({
+    where: { id },
+    select: { archive: { select: { userId: true } } },
+  });
+  return pinjam?.archive.userId === user.userId;
 }
 
 // GET - Get peminjaman by ID
 export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
-    const { id } = params;
+    const { user, error } = requireAuth(request);
+    if (error) return error;
+
+    // Await params to get the actual object
+    const { id } = await params;
+
+    if (!(await canAccessPinjaman(id, user))) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
 
     const peminjaman = await prisma.peminjaman.findUnique({
       where: { id },
@@ -63,7 +84,16 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 // PUT - Update peminjaman by ID
 export async function PUT(request: NextRequest, { params }: RouteParams) {
   try {
-    const { id } = params;
+    const { user, error } = requireAuth(request);
+    if (error) return error;
+
+    // Await params to get the actual object
+    const { id } = await params;
+
+    if (!(await canAccessPinjaman(id, user))) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
     const data = await request.json();
 
     // Check if peminjaman exists
@@ -100,7 +130,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
     // Check if nomorSurat is unique (if being updated)
     if (data.nomorSurat && data.nomorSurat !== existingPeminjaman.nomorSurat) {
-      const existingNomorSurat = await prisma.peminjaman.findUnique({
+      const existingNomorSurat = await prisma.peminjaman.findFirst({
         where: { nomorSurat: data.nomorSurat },
       });
 
@@ -172,7 +202,15 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 // DELETE - Delete peminjaman by ID
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
   try {
-    const { id } = params;
+    const { user, error } = requireAuth(request);
+    if (error) return error;
+
+    // Await params to get the actual object
+    const { id } = await params;
+
+    if (!(await canAccessPinjaman(id, user))) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
 
     // Check if peminjaman exists
     const existingPeminjaman = await prisma.peminjaman.findUnique({

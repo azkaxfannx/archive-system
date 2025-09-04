@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   ArchiveRecord,
   ArchiveFormData,
@@ -85,6 +86,8 @@ const PeminjamanErrorModal = ({
 };
 
 export default function ArchiveManagement() {
+  const router = useRouter();
+
   // State management
   const [currentPage, setCurrentPage] = useState(1);
   const [searchQuery, setSearchQuery] = useState("");
@@ -95,6 +98,65 @@ export default function ArchiveManagement() {
     {}
   );
   const [showPeminjamanForm, setShowPeminjamanForm] = useState(false);
+  const [user, setUser] = useState<any | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
+
+  // Enhanced authentication check
+  const checkAuthStatus = async () => {
+    try {
+      const token = localStorage.getItem("token");
+
+      if (!token) {
+        console.log("No token found in ArchiveManagement");
+        router.push("/login");
+        return false;
+      }
+
+      const response = await fetch("/api/auth/me", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.user) {
+          setUser(data.user);
+          return true;
+        }
+      }
+
+      // If we reach here, auth failed
+      throw new Error("Authentication failed");
+    } catch (error) {
+      console.error("Auth check failed in ArchiveManagement:", error);
+      localStorage.removeItem("token");
+      setUser(null);
+      router.push("/login");
+      return false;
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const fetchLastUpdate = async () => {
+    // This function can remain as is, since it's just for display
+  };
+
+  // Modified useEffect with proper auth check
+  useEffect(() => {
+    const initializeComponent = async () => {
+      const isAuthenticated = await checkAuthStatus();
+
+      if (isAuthenticated) {
+        fetchLastUpdate();
+        const interval = setInterval(fetchLastUpdate, 30000);
+        return () => clearInterval(interval);
+      }
+    };
+
+    initializeComponent();
+  }, []);
 
   // New state for period and year filters
   const [periodFilters, setPeriodFilters] = useState({
@@ -112,11 +174,13 @@ export default function ArchiveManagement() {
   });
 
   useEffect(() => {
-    fetch("/api/archives/stats")
-      .then((res) => res.json())
-      .then((data) => setStats(data))
-      .catch((err) => console.error("Failed to fetch stats:", err));
-  }, []);
+    if (user) {
+      fetch("/api/archives/stats")
+        .then((res) => res.json())
+        .then((data) => setStats(data))
+        .catch((err) => console.error("Failed to fetch stats:", err));
+    }
+  }, [user]);
 
   // Modal states
   const [showAddForm, setShowAddForm] = useState(false);
@@ -155,7 +219,6 @@ export default function ArchiveManagement() {
     order: sortOrder,
     status: selectedFilter,
     filters: columnFilters,
-    // Add period filters
     startMonth: periodFilters.startMonth,
     endMonth: periodFilters.endMonth,
     year: periodFilters.year,
@@ -183,7 +246,7 @@ export default function ArchiveManagement() {
       ...prev,
       [field]: value,
     }));
-    setCurrentPage(1); // Reset to first page when filter changes
+    setCurrentPage(1);
   };
 
   // FIXED: Proper bidirectional sorting handler
@@ -195,14 +258,11 @@ export default function ArchiveManagement() {
     });
 
     if (sortField === field) {
-      // Toggle direction jika field yang sama diklik
       const newOrder = sortOrder === "asc" ? "desc" : "asc";
       setSortOrder(newOrder);
       console.log("Toggling sort order to:", newOrder);
     } else {
-      // Set field baru dengan default yang konsisten
       setSortField(field);
-      // Untuk tanggal, default ke DESC agar terbaru di atas
       const defaultOrder = field === "tanggal" ? "desc" : "asc";
       setSortOrder(defaultOrder);
       console.log(
@@ -220,21 +280,10 @@ export default function ArchiveManagement() {
 
   // IMPROVED: Column filter handler
   const handleColumnFilter = (column: string, value: string) => {
-    setColumnFilters((prev) => {
-      const newFilters = { ...prev };
-
-      if (value.trim() === "") {
-        // Remove filter jika value kosong
-        delete newFilters[column];
-      } else {
-        // Set filter value
-        newFilters[column] = value;
-      }
-
-      return newFilters;
-    });
-
-    // Reset ke halaman pertama saat filter berubah
+    setColumnFilters((prev) => ({
+      ...prev,
+      [column]: value,
+    }));
     setCurrentPage(1);
   };
 
@@ -242,9 +291,8 @@ export default function ArchiveManagement() {
     try {
       setIsLoading(true);
 
-      // Get all archives with current filters applied
       const queryParams = new URLSearchParams({
-        limit: "999999", // Get all records
+        limit: "999999",
         search: searchQuery,
         status: selectedFilter,
         sort: sortField,
@@ -256,7 +304,6 @@ export default function ArchiveManagement() {
         ...(periodFilters.endMonth && { endMonth: periodFilters.endMonth }),
       });
 
-      // Add column filters
       Object.entries(columnFilters).forEach(([key, value]) => {
         queryParams.append(`filter[${key}]`, value);
       });
@@ -292,7 +339,6 @@ export default function ArchiveManagement() {
       const workbook = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(workbook, worksheet, "Data Arsip");
 
-      // Generate filename with period info
       let periodInfo = "";
       if (periodFilters.year) {
         periodInfo += `-${periodFilters.year}`;
@@ -306,18 +352,11 @@ export default function ArchiveManagement() {
       }.xlsx`;
       XLSX.writeFile(workbook, fileName);
 
-      // Simpan hasil export ke modal
-      setExportResult({
-        fileName,
-        totalRows: allArchives.length,
-      });
+      setExportResult({ fileName, totalRows: allArchives.length });
       setShowExportResultModal(true);
     } catch (error) {
       console.error("Export failed:", error);
-      setExportResult({
-        fileName: "Gagal Export",
-        totalRows: 0,
-      });
+      setExportResult({ fileName: "Gagal Export", totalRows: 0 });
       setShowExportResultModal(true);
     } finally {
       setIsLoading(false);
@@ -326,24 +365,16 @@ export default function ArchiveManagement() {
 
   const handleImport = async (file: File) => {
     const result = await archiveAPI.importExcel(file);
-
-    // Simpan result ke state
     setImportResult(result);
     setShowImportResultModal(true);
-
-    // Refresh data
     mutate();
-
     fetch("/api/archives/stats")
       .then((res) => res.json())
       .then((data) => setStats(data));
-
     triggerHeaderRefresh();
-
     setShowImportModal(false);
   };
 
-  // Handlers
   const handleSaveArchive = async (formData: ArchiveFormData) => {
     setIsLoading(true);
     try {
@@ -358,14 +389,10 @@ export default function ArchiveManagement() {
       setShowAddForm(false);
       setSelectedArchive(null);
       mutate();
-
       fetch("/api/archives/stats")
         .then((res) => res.json())
         .then((data) => setStats(data));
-
       triggerHeaderRefresh();
-
-      // Tampilkan modal sukses
       setShowSuccessModal(true);
     } catch (error) {
       console.error(error);
@@ -380,7 +407,6 @@ export default function ArchiveManagement() {
     setShowPeminjamanForm(true);
   };
 
-  // FIXED: Enhanced handleSavePeminjaman with consistent error handling and refresh trigger
   const handleSavePeminjaman = async (formData: PeminjamanFormData) => {
     setIsLoading(true);
     try {
@@ -390,23 +416,11 @@ export default function ArchiveManagement() {
 
       setShowPeminjamanForm(false);
       setSelectedArchive(null);
-
-      // Trigger refresh untuk update status peminjaman di table
       triggerTableRefresh();
-
-      // Tampilkan modal sukses
       setShowSuccessModal(true);
     } catch (error: any) {
       console.error("Error creating peminjaman:", error);
 
-      // Log detailed error information for debugging
-      console.log("Error details:", {
-        status: error?.response?.status,
-        data: error?.response?.data,
-        message: error?.message,
-      });
-
-      // Check if it's a 400 error with specific message about duplicate nomorSurat
       const isConflictError = error?.response?.status === 400;
       const errorMessage = error?.response?.data?.error || error?.message || "";
       const isDuplicateNomorSurat = errorMessage.includes(
@@ -414,7 +428,6 @@ export default function ArchiveManagement() {
       );
 
       if (isConflictError && isDuplicateNomorSurat) {
-        // Show custom modal for peminjaman conflict
         console.log("Showing peminjaman error modal");
         setPeminjamanErrorMessage(
           "Nomor surat ini masih digunakan untuk peminjaman yang belum dikembalikan. " +
@@ -422,7 +435,6 @@ export default function ArchiveManagement() {
         );
         setShowPeminjamanErrorModal(true);
       } else {
-        // Show generic error for other cases
         const fallbackMessage = "Terjadi kesalahan saat membuat peminjaman!";
         const displayMessage = errorMessage || fallbackMessage;
         alert(displayMessage);
@@ -432,35 +444,24 @@ export default function ArchiveManagement() {
     }
   };
 
-  // DEBUG: Log state changes
-  useEffect(() => {
-    console.log("Sort state changed:", { sortField, sortOrder });
-  }, [sortField, sortOrder]);
+  // Show loading while checking auth
+  if (authLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
 
-  useEffect(() => {
-    console.log("Column filters changed:", columnFilters);
-  }, [columnFilters]);
-
-  useEffect(() => {
-    console.log("Period filters changed:", periodFilters);
-  }, [periodFilters]);
-
-  // Debug modal state
-  useEffect(() => {
-    console.log("Peminjaman error modal state:", {
-      showPeminjamanErrorModal,
-      peminjamanErrorMessage,
-    });
-  }, [showPeminjamanErrorModal, peminjamanErrorMessage]);
+  // Don't render anything if user is not authenticated
+  if (!user) {
+    return null;
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <Header
-        user={{ id: "1", name: "Admin" }}
-        onLogout={() => alert("Logout!")}
-        refreshTrigger={headerRefreshTrigger}
-      />
+      <Header refreshTrigger={headerRefreshTrigger} />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         {/* Stats Cards */}
@@ -518,12 +519,9 @@ export default function ArchiveManagement() {
           if (deleteId) {
             await archiveAPI.deleteArchive(deleteId);
             mutate();
-
-            // refresh stats
             fetch("/api/archives/stats")
               .then((res) => res.json())
               .then((data) => setStats(data));
-
             triggerHeaderRefresh();
           }
           setShowDeleteModal(false);
