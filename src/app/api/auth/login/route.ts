@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
-import { signToken, setAuthCookie } from "@/utils/auth";
+import { signToken, AUTH_COOKIE_NAME } from "@/utils/auth";
 
 export const runtime = "nodejs";
 
@@ -22,9 +22,7 @@ export async function POST(req: Request) {
 
     const token = signToken({ userId: user.id, role: user.role as any });
 
-    // FIXED: Use await for setAuthCookie
-    await setAuthCookie(token);
-
+    // Create response dengan user data
     const res = NextResponse.json({
       user: {
         id: user.id,
@@ -32,6 +30,15 @@ export async function POST(req: Request) {
         email: user.email,
         role: user.role,
       },
+    });
+
+    // Set cookie di response
+    res.cookies.set(AUTH_COOKIE_NAME, token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: "/",
+      maxAge: 7 * 24 * 60 * 60, // 7 days in seconds
     });
 
     return res;

@@ -101,36 +101,38 @@ export default function ArchiveManagement() {
   const [user, setUser] = useState<any | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
 
-  // Enhanced authentication check
+  // FIXED: Use cookie-based authentication like in HomePage
   const checkAuthStatus = async () => {
     try {
-      const token = localStorage.getItem("token");
-
-      if (!token) {
-        console.log("No token found in ArchiveManagement");
-        router.push("/login");
-        return false;
-      }
+      setAuthLoading(true);
 
       const response = await fetch("/api/auth/me", {
+        method: "GET",
+        credentials: "include", // Include cookies
         headers: {
-          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
         },
       });
 
+      console.log("ArchiveManagement auth check response:", response.status);
+
       if (response.ok) {
         const data = await response.json();
+        console.log("ArchiveManagement auth data:", data);
+
         if (data.user) {
           setUser(data.user);
           return true;
+        } else {
+          throw new Error("No user data received");
         }
+      } else {
+        throw new Error(
+          `Authentication failed with status: ${response.status}`
+        );
       }
-
-      // If we reach here, auth failed
-      throw new Error("Authentication failed");
     } catch (error) {
       console.error("Auth check failed in ArchiveManagement:", error);
-      localStorage.removeItem("token");
       setUser(null);
       router.push("/login");
       return false;
@@ -175,7 +177,9 @@ export default function ArchiveManagement() {
 
   useEffect(() => {
     if (user) {
-      fetch("/api/archives/stats")
+      fetch("/api/archives/stats", {
+        credentials: "include", // FIXED: Add credentials for cookie-based auth
+      })
         .then((res) => res.json())
         .then((data) => setStats(data))
         .catch((err) => console.error("Failed to fetch stats:", err));
@@ -308,7 +312,10 @@ export default function ArchiveManagement() {
         queryParams.append(`filter[${key}]`, value);
       });
 
-      const response = await fetch(`/api/archives?${queryParams}`);
+      // FIXED: Add credentials for cookie-based auth
+      const response = await fetch(`/api/archives?${queryParams}`, {
+        credentials: "include",
+      });
       const result = await response.json();
       const allArchives = result.data || [];
 
@@ -368,7 +375,9 @@ export default function ArchiveManagement() {
     setImportResult(result);
     setShowImportResultModal(true);
     mutate();
-    fetch("/api/archives/stats")
+    fetch("/api/archives/stats", {
+      credentials: "include", // FIXED: Add credentials
+    })
       .then((res) => res.json())
       .then((data) => setStats(data));
     triggerHeaderRefresh();
@@ -389,7 +398,9 @@ export default function ArchiveManagement() {
       setShowAddForm(false);
       setSelectedArchive(null);
       mutate();
-      fetch("/api/archives/stats")
+      fetch("/api/archives/stats", {
+        credentials: "include", // FIXED: Add credentials
+      })
         .then((res) => res.json())
         .then((data) => setStats(data));
       triggerHeaderRefresh();
@@ -519,7 +530,9 @@ export default function ArchiveManagement() {
           if (deleteId) {
             await archiveAPI.deleteArchive(deleteId);
             mutate();
-            fetch("/api/archives/stats")
+            fetch("/api/archives/stats", {
+              credentials: "include", // FIXED: Add credentials
+            })
               .then((res) => res.json())
               .then((data) => setStats(data));
             triggerHeaderRefresh();

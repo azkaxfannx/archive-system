@@ -49,17 +49,8 @@ export default function Header({ refreshTrigger }: HeaderProps) {
 
   const fetchUser = async () => {
     try {
-      const token = localStorage.getItem("token");
-      if (!token) {
-        setUser(null);
-        router.push("/login");
-        return;
-      }
-
       const res = await fetch("/api/auth/me", {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+        credentials: "include",
       });
 
       if (res.ok) {
@@ -67,24 +58,24 @@ export default function Header({ refreshTrigger }: HeaderProps) {
         setUser(data.user);
       } else {
         setUser(null);
-        localStorage.removeItem("token");
         router.push("/login");
       }
     } catch (error) {
       console.error("Fetch user error:", error);
       setUser(null);
-      localStorage.removeItem("token");
       router.push("/login");
     }
   };
 
   const handleLogout = async () => {
     try {
-      await fetch("/api/auth/logout", { method: "POST" });
+      await fetch("/api/auth/logout", {
+        method: "POST",
+        credentials: "include",
+      });
     } catch (error) {
       console.error("Logout error:", error);
     } finally {
-      localStorage.removeItem("token");
       setUser(null);
       router.push("/login");
     }

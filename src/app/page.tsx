@@ -11,44 +11,55 @@ export default function HomePage() {
   const router = useRouter();
   const [isAuth, setIsAuth] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [user, setUser] = useState<any>(null);
 
   // Centralized auth check function
-  const checkAuth = async () => {
+  const checkAuth = async (retryCount = 0) => {
     try {
       setIsLoading(true);
 
-      // Check both token and API validation
-      const token = localStorage.getItem("token");
-
-      if (!token) {
-        console.log("No token found, redirecting to login");
-        router.push("/login");
-        return;
-      }
-
-      // Validate token with API
       const response = await fetch("/api/auth/me", {
+        method: "GET",
+        credentials: "include", // Include cookies
         headers: {
-          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+          // Add cache-control to prevent caching issues
+          "Cache-Control": "no-cache",
         },
       });
 
+      console.log("Auth check response status:", response.status); // Debug log
+
       if (response.ok) {
         const data = await response.json();
+        console.log("Auth check data:", data); // Debug log
+
         if (data.user) {
+          setUser(data.user);
           setIsAuth(true);
+          return true;
         } else {
-          throw new Error("Invalid user data");
+          throw new Error("No user data received");
         }
       } else {
-        throw new Error("Authentication failed");
+        throw new Error(
+          `Authentication failed with status: ${response.status}`
+        );
       }
     } catch (error) {
       console.error("Auth check failed:", error);
-      // Clear invalid token
-      localStorage.removeItem("token");
+
+      // Retry once after a short delay if this is the first failure
+      if (retryCount === 0) {
+        console.log("Retrying auth check...");
+        await new Promise((resolve) => setTimeout(resolve, 200));
+        return await checkAuth(1);
+      }
+
       setIsAuth(false);
-      router.push("/login");
+      setUser(null);
+      router.replace("/login");
+      return false;
     } finally {
       setIsLoading(false);
     }
@@ -56,7 +67,21 @@ export default function HomePage() {
 
   useEffect(() => {
     checkAuth();
-  }, [router]);
+  }, []);
+
+  // Prevent flash of login page when navigating from login
+  useEffect(() => {
+    // If we're coming from login (check referrer or add query param)
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get("from") === "login") {
+      // Remove the parameter
+      urlParams.delete("from");
+      const newUrl =
+        window.location.pathname +
+        (urlParams.toString() ? "?" + urlParams.toString() : "");
+      window.history.replaceState({}, "", newUrl);
+    }
+  }, []);
 
   const tab = searchParams.get("tab") || "archive";
 
@@ -64,20 +89,6 @@ export default function HomePage() {
     const params = new URLSearchParams(searchParams);
     params.set("tab", newTab);
     router.push("?" + params.toString());
-  };
-
-  const handleLogout = async () => {
-    try {
-      // Call logout API
-      await fetch("/api/auth/logout", { method: "POST" });
-    } catch (error) {
-      console.error("Logout API error:", error);
-    } finally {
-      // Always clear local storage and redirect
-      localStorage.removeItem("token");
-      setIsAuth(false);
-      router.push("/login");
-    }
   };
 
   // Show loading spinner while checking auth
@@ -115,12 +126,14 @@ export default function HomePage() {
             Peminjaman
           </button>
         </div>
-        {/* <button
-          onClick={handleLogout}
-          className="px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700"
-        >
-          Logout
-        </button> */}
+
+        <div className="flex items-center space-x-4">
+          {user && (
+            <span className="text-sm text-gray-600">
+              Welcome, {user.name || user.email}
+            </span>
+          )}
+        </div>
       </div>
 
       {tab === "archive" ? <ArchiveManagement /> : <PeminjamanManagement />}

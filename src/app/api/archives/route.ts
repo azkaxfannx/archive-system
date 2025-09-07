@@ -6,9 +6,24 @@ import { requireAuth } from "@/utils/withAuth";
 // GET - Fetch archives with pagination and filters
 export async function GET(req: NextRequest) {
   try {
-    const { user, error } = requireAuth(req);
-    if (error) return error;
+    console.log("=== ARCHIVES API DEBUG ===");
+    console.log("Headers:", Object.fromEntries(req.headers.entries()));
+    console.log("Cookies:", Object.fromEntries(req.cookies));
 
+    const authToken = req.cookies.get("auth-token")?.value;
+    console.log("Auth token found:", authToken ? "YES" : "NO");
+
+    const { user, error } = requireAuth(req);
+    console.log("Auth result:", { user: !!user, error: !!error });
+
+    if (error) {
+      console.log("Auth failed, returning error");
+      return error;
+    }
+
+    console.log("Auth successful, user:", user);
+
+    // Rest of your existing code...
     const { searchParams } = new URL(req.url);
 
     const page = parseInt(searchParams.get("page") || "1");

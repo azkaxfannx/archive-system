@@ -1,5 +1,4 @@
 import jwt from "jsonwebtoken";
-import { cookies } from "next/headers";
 
 export const AUTH_COOKIE_NAME = "auth-token";
 const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key";
@@ -23,28 +22,5 @@ export function verifyToken(token: string): TokenPayload | null {
   }
 }
 
-export async function setAuthCookie(token: string): Promise<void> {
-  const cookieStore = await cookies();
-  cookieStore.set({
-    name: AUTH_COOKIE_NAME,
-    value: token,
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    maxAge: 7 * 24 * 60 * 60, // 7 days
-    path: "/",
-  });
-}
-
-export async function clearAuthCookie(): Promise<void> {
-  const cookieStore = await cookies();
-  cookieStore.set({
-    name: AUTH_COOKIE_NAME,
-    value: "",
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    maxAge: 0,
-    path: "/",
-  });
-}
+// Simplified utility functions - cookies are handled in route handlers
+export { AUTH_COOKIE_NAME as default };
